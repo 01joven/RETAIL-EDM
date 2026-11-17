@@ -96,6 +96,12 @@ Use a Render **Web Service** with the repository root as its root directory:
 
 The root build script installs the client and server packages, builds the Vite frontend, and the Express server serves that build alongside the API.
 
+## Vercel frontend with Render API
+
+The production Vite build uses `client/.env.production` to call `https://retail-edm.onrender.com/api/v1`. If `VITE_API_URL` is also set in Vercel, make sure it has that exact value because Vercel environment variables override the file.
+
+In the Render service's Environment settings, set `CLIENT_ORIGIN` to `https://retail-edm.vercel.app` and redeploy the backend. Vercel will rebuild the frontend when the production API URL change is pushed. Do not put database credentials or API keys in the frontend.
+
 ## API overview
 
 All endpoints are under `/api/v1`. Dashboard endpoints use `Authorization: Bearer <accessToken>`.
