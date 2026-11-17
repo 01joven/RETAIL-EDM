@@ -100,6 +100,7 @@ td:first-child{display:table-cell}
 .login-shell{min-height:100vh;display:grid;place-items:center;padding:20px;background:radial-gradient(ellipse at 50% 40%,#f0edff 0,transparent 55%),#f7f8fb}
 .login-card{width:min(100%,390px);background:#fff;border:1px solid #eceef4;border-radius:14px;padding:35px;box-shadow:0 18px 55px #4e47720d}
 .login-card .brand-mark{margin-bottom:24px}.login-card .eyebrow{margin:0 0 9px}.login-card h1{font-size:24px}.login-card .muted{margin-bottom:25px}.login-card label{margin-bottom:15px}.login-card input{height:42px;width:100%}.login-note{text-align:center;font-size:9px;color:#a3a9b5;margin:16px 0 0}
+.link-button{display:block;border:0;background:none;color:#7059e8;font-size:10px;font-weight:700;margin:14px auto 0;padding:4px}.link-button:hover{text-decoration:underline}.success-banner{background:#edf9f3;border:1px solid #d5efdf;color:#25865d;padding:11px 13px;border-radius:7px;font-size:10px;margin:0 0 14px}
 .unauthorized-card{max-width:520px;margin:50px auto;padding:32px;text-align:center}.unauthorized-card .stat-icon{margin:0 auto 17px}.unauthorized-card .eyebrow{margin-bottom:9px}.unauthorized-card h1{font-size:23px;margin-bottom:8px}.unauthorized-card .primary-button{margin-top:22px}
 .user-form select{height:36px;border:1px solid #e7e9ef;border-radius:7px;padding:0 10px;min-width:135px;color:#30374a;background:#fff;font-size:11px}
 .user-actions{min-width:250px}.danger-text{color:#c5524c}.you-tag{font-size:8px;color:#7059e8;background:#f1efff;border-radius:10px;padding:3px 6px;margin-left:8px;font-weight:700}

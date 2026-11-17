@@ -86,7 +86,8 @@ router.patch('/:id', async (req, res, next) => {
       `UPDATE users
        SET email = COALESCE($2, email),
            password_hash = COALESCE($3, password_hash),
-           role = COALESCE($4, role)
+           role = COALESCE($4, role),
+           token_version = token_version + CASE WHEN $3::text IS NULL THEN 0 ELSE 1 END
        WHERE id = $1
        RETURNING id, email, role, created_at`,
       [id, email === undefined ? null : email.trim().toLowerCase(), passwordHash, role ?? null]

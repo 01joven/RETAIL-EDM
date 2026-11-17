@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config } from './config/env.js';
 import authRoutes from './routes/auth.js';
 import productRoutes from './routes/products.js';
@@ -11,6 +13,7 @@ import settingsRoutes from './routes/settings.js';
 import { errorHandler, notFound } from './middleware/errors.js';
 
 const app = express();
+const clientDist = fileURLToPath(new URL('../../client/dist', import.meta.url));
 app.disable('x-powered-by');
 app.use(helmet());
 app.use(cors({ origin: config.clientOrigin }));
@@ -26,6 +29,13 @@ app.use('/api/v1/transactions', transactionRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/settings', settingsRoutes);
+app.use(express.static(clientDist));
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api/')) return next();
+  return res.sendFile(path.join(clientDist, 'index.html'), (error) => {
+    if (error) next(error);
+  });
+});
 app.use(notFound);
 app.use(errorHandler);
 

@@ -3,9 +3,11 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin', 'cashier')),
+  token_version INTEGER NOT NULL DEFAULT 0 CHECK (token_version >= 0),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0 CHECK (token_version >= 0);
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 DO $migration$
 BEGIN
@@ -17,6 +19,19 @@ BEGIN
   END IF;
 END
 $migration$;
+
+CREATE TABLE IF NOT EXISTS password_reset_codes (
+  id BIGSERIAL PRIMARY KEY,
+  user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code_hash CHAR(64) NOT NULL,
+  attempts SMALLINT NOT NULL DEFAULT 0 CHECK (attempts BETWEEN 0 AND 5),
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  used_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS password_reset_codes_user_created_idx
+  ON password_reset_codes (user_id, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS products (
   id BIGSERIAL PRIMARY KEY,

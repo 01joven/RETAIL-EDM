@@ -17,5 +17,7 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL,
   jwtSecret: process.env.JWT_SECRET,
   posApiKey: process.env.POS_API_KEY,
+  resendApiKey: process.env.RESEND_API_KEY || '',
+  resendFromEmail: process.env.RESEND_FROM_EMAIL || '',
   clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:3000'
 };

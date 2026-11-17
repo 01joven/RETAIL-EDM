@@ -14,10 +14,13 @@ export async function authenticate(req, res, next) {
   }
   try {
     const user = await pool.query(
-      'SELECT id, email, role FROM users WHERE id = $1 AND role IN (\'admin\', \'cashier\')',
+      'SELECT id, email, role, token_version FROM users WHERE id = $1 AND role IN (\'admin\', \'cashier\')',
       [claims.sub]
     );
     if (!user.rowCount) return res.status(401).json({ error: 'Account is no longer available' });
+    if (claims.tokenVersion !== user.rows[0].token_version) {
+      return res.status(401).json({ error: 'Session is no longer valid; please sign in again' });
+    }
     req.user = {
       id: user.rows[0].id,
       sub: String(user.rows[0].id),

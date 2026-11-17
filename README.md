@@ -57,13 +57,17 @@ Requirements: Node.js 20+ and PostgreSQL 16+ (local or managed, such as Neon).
 
    Set the output as `JWT_SECRET`, run the command again for `POS_API_KEY`, and set a unique `ADMIN_PASSWORD` with at least 12 characters. Keep `.env` private; never commit production secrets. Do not share the database connection string.
 
-4. Configure the browser API URL (the default uses Vite's local API proxy):
+4. Configure Resend for password recovery. Create an API key in the Resend dashboard and set `RESEND_API_KEY` in `server\.env`. Verify a sending domain with Resend, then set `RESEND_FROM_EMAIL` to a sender address on that domain (for example `RetailFlow <no-reply@your-domain.com>`). Keep the API key private. Resend's test sender is limited to verified recipients and is not suitable for sending to arbitrary Gmail accounts.
+
+   Password recovery sends a six-digit code to the account's registered email. The code expires after 10 minutes, can be attempted at most five times, and a new code is rate-limited. Update the account email to the user's real Gmail address in **Users → Change email** before expecting recovery mail there.
+
+5. Configure the browser API URL (the default uses Vite's local API proxy):
 
    ```powershell
    Copy-Item client\.env.example client\.env
    ```
 
-5. Apply the schema and create the initial admin:
+6. Apply the schema and create the initial admin:
 
    ```powershell
    npm run db:migrate --prefix server
@@ -72,13 +76,25 @@ Requirements: Node.js 20+ and PostgreSQL 16+ (local or managed, such as Neon).
 
    The migration adds cashier ownership and inventory stock, and enforces the two-role constraint while retaining existing transaction and product rows. The seed command reads `ADMIN_EMAIL` and `ADMIN_PASSWORD` from `server\.env`; it never installs a default password.
 
-6. Start the frontend and API:
+7. Start the frontend and API:
 
    ```powershell
    npm run dev
    ```
 
    Open `http://localhost:3000`. Sign in with the configured admin email and password.
+
+## Render deployment
+
+Use a Render **Web Service** with the repository root as its root directory:
+
+- Build command: `npm install && npm run build`
+- Start command: `npm start`
+- Add `DATABASE_URL`, `JWT_SECRET`, and `POS_API_KEY` as Render environment variables. Add `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to enable password reset email. Set `CLIENT_ORIGIN` to the deployed service URL.
+- Set a Render pre-deploy command to `npm run db:migrate --prefix server` so schema updates are applied before new code starts.
+- Run `npm run db:seed-admin --prefix server` once from the Render shell with `ADMIN_EMAIL` and `ADMIN_PASSWORD` set, if the production database has no admin account.
+
+The root build script installs the client and server packages, builds the Vite frontend, and the Express server serves that build alongside the API.
 
 ## API overview
 
@@ -88,6 +104,8 @@ All endpoints are under `/api/v1`. Dashboard endpoints use `Authorization: Beare
 |---|---|---|
 | `GET /health` | Public | API health check |
 | `POST /auth/login` | Public, rate-limited | Issue JWT |
+| `POST /auth/forgot-password` | Public, rate-limited | Request a one-time email verification code |
+| `POST /auth/reset-password` | Public, rate-limited | Reset password with a valid code |
 | `GET /auth/me` | Authenticated | Current user |
 | `GET /products` | Admin or cashier | List products and stock; cashiers see active products only |
 | `POST /products` | Admin | Create a product with initial stock |

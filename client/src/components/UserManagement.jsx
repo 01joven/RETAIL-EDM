@@ -37,6 +37,16 @@ export default function UserManagement({ token, currentUser }) {
     } catch (reason) { setError(reason.message); }
   }
 
+  async function changeEmail(user) {
+    const email = window.prompt('Enter the verified email address for this account:', user.email);
+    if (email === null || email.trim() === user.email) return;
+    try {
+      await api(`/users/${user.id}`, { token, method: 'PATCH', body: JSON.stringify({ email: email.trim() }) });
+      setError('');
+      await load();
+    } catch (reason) { setError(reason.message); }
+  }
+
   async function deleteUser(user) {
     if (!window.confirm(`Delete the account for ${user.email}? Existing sales will be retained.`)) return;
     try {
@@ -61,7 +71,7 @@ export default function UserManagement({ token, currentUser }) {
           {users.map((user) => {
             const isSelf = String(user.id) === String(currentUser.id);
             return <tr key={user.id}><td><strong>{user.email}</strong>{isSelf && <span className="you-tag">YOU</span>}</td><td><span className={`status-pill ${user.role === 'admin' ? 'admin-role' : 'completed'}`}>{user.role}</span></td><td>{new Date(user.created_at).toLocaleDateString()}</td><td className="align-right user-actions">
-              <button className="text-button" onClick={() => resetPassword(user)}>Reset password</button>
+              <button className="text-button" onClick={() => changeEmail(user)}>Change email</button><button className="text-button" onClick={() => resetPassword(user)}>Reset password</button>
               {!isSelf && <>{user.role === 'admin' && <button className="text-button" onClick={() => changeRole(user, 'cashier')}>Make cashier</button>}<button className="text-button danger-text" onClick={() => deleteUser(user)}>Delete</button></>}
             </td></tr>;
           })}
