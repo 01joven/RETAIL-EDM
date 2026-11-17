@@ -57,7 +57,7 @@ Requirements: Node.js 20+ and PostgreSQL 16+ (local or managed, such as Neon).
 
    Set the output as `JWT_SECRET`, run the command again for `POS_API_KEY`, and set a unique `ADMIN_PASSWORD` with at least 12 characters. Keep `.env` private; never commit production secrets. Do not share the database connection string.
 
-4. Configure Resend for password recovery. Create an API key in the Resend dashboard and set `RESEND_API_KEY` in `server\.env`. Verify a sending domain with Resend, then set `RESEND_FROM_EMAIL` to a sender address on that domain (for example `RetailFlow <no-reply@your-domain.com>`). Keep the API key private. Resend's test sender is limited to verified recipients and is not suitable for sending to arbitrary Gmail accounts.
+4. Configure Resend for password recovery. Create an API key in the Resend dashboard and set `RESEND_API_KEY` in `server\.env`. Verify a sending domain with Resend, then set `RESEND_FROM_EMAIL` to a sender address on that domain (for example `RetailFlow <no-reply@your-domain.com>`). Keep the API key private. Resend's test sender is limited to verified recipients and is not suitable for sending to arbitrary Gmail accounts. The account's registered email must be the Gmail address that should receive the code.
 
    Password recovery sends a six-digit code to the account's registered email. The code expires after 10 minutes, can be attempted at most five times, and a new code is rate-limited. Update the account email to the user's real Gmail address in **Users → Change email** before expecting recovery mail there.
 
@@ -90,7 +90,7 @@ Use a Render **Web Service** with the repository root as its root directory:
 
 - Build command: `npm install && npm run build`
 - Start command: `npm start`
-- Add `DATABASE_URL`, `JWT_SECRET`, and `POS_API_KEY` as Render environment variables. Add `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to enable password reset email. Set `CLIENT_ORIGIN` to the deployed service URL.
+- Add `DATABASE_URL`, `JWT_SECRET`, and `POS_API_KEY` as Render environment variables. Add `RESEND_API_KEY` and `RESEND_FROM_EMAIL` to enable password reset email. Set production `CLIENT_ORIGIN` to `https://retail-edm.vercel.app`.
 - Set a Render pre-deploy command to `npm run db:migrate --prefix server` so schema updates are applied before new code starts.
 - Run `npm run db:seed-admin --prefix server` once from the Render shell with `ADMIN_EMAIL` and `ADMIN_PASSWORD` set, if the production database has no admin account.
 
@@ -100,7 +100,7 @@ The root build script installs the client and server packages, builds the Vite f
 
 The production Vite build uses `client/.env.production` to call `https://retail-edm.onrender.com/api/v1`. If `VITE_API_URL` is also set in Vercel, make sure it has that exact value because Vercel environment variables override the file.
 
-In the Render service's Environment settings, set `CLIENT_ORIGIN` to `https://retail-edm.vercel.app` and redeploy the backend. Vercel will rebuild the frontend when the production API URL change is pushed. Do not put database credentials or API keys in the frontend.
+In the Render service's Environment settings, set `CLIENT_ORIGIN` to `https://retail-edm.vercel.app` and redeploy the backend. Locally, `server/.env` can allow both `http://localhost:3000` and `https://retail-edm.vercel.app` as a comma-separated list. Vercel will rebuild the frontend when the production API URL change is pushed. Do not put database credentials or API keys in the frontend.
 
 ## API overview
 

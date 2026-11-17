@@ -16,7 +16,7 @@ const app = express();
 const clientDist = fileURLToPath(new URL('../../client/dist', import.meta.url));
 app.disable('x-powered-by');
 app.use(helmet());
-app.use(cors({ origin: config.clientOrigin }));
+app.use(cors({ origin: config.clientOrigins }));
 app.use(express.json({ limit: '100kb' }));
 app.use((req, res, next) => {
   if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) req.body = {};

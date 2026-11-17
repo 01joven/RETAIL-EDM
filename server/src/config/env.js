@@ -11,6 +11,14 @@ if (process.env.POS_API_KEY.length < 32) {
   throw new Error('POS_API_KEY must be at least 32 characters long');
 }
 
+const clientOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:3000')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+if (!clientOrigins.length) {
+  throw new Error('CLIENT_ORIGIN must contain at least one origin');
+}
+
 export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 4000),
@@ -19,5 +27,5 @@ export const config = {
   posApiKey: process.env.POS_API_KEY,
   resendApiKey: process.env.RESEND_API_KEY || '',
   resendFromEmail: process.env.RESEND_FROM_EMAIL || '',
-  clientOrigin: process.env.CLIENT_ORIGIN || 'http://localhost:3000'
+  clientOrigins
 };
