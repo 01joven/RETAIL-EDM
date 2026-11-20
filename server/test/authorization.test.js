@@ -33,3 +33,8 @@ test('admin-only routes allow admins and cashier sale routes allow both roles', 
 test('only the two supported roles are authorized', () => {
   assert.equal(requestRole('manager', ['admin', 'cashier']).statusCode, 403);
 });
+
+test('only cashiers are authorized to manage cashier shifts', () => {
+  assert.equal(requestRole('admin', ['cashier']).statusCode, 403);
+  assert.equal(requestRole('cashier', ['cashier']).continued, true);
+});

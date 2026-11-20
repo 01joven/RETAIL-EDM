@@ -3,15 +3,28 @@ import { api } from '../api/client.js';
 import { money } from '../api/money.js';
 import StatCard from './StatCard.jsx';
 
+function parseCashAmount(value) {
+  if (!/^\d+(?:\.\d{1,2})?$/.test(value.trim())) return null;
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : null;
+}
+
 export default function CashierDashboard({ token }) {
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [transactions, setTransactions] = useState([]);
+  const [shift, setShift] = useState(null);
+  const [shiftTotals, setShiftTotals] = useState(null);
   const [cart, setCart] = useState([]);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
+  const [shiftNotice, setShiftNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [shiftBusy, setShiftBusy] = useState(false);
   const [receipt, setReceipt] = useState(null);
+  const [showCloseShift, setShowCloseShift] = useState(false);
+  const [openingFloat, setOpeningFloat] = useState('10.00');
+  const [closingCash, setClosingCash] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [salesChannel, setSalesChannel] = useState('store');
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
@@ -22,12 +35,15 @@ export default function CashierDashboard({ token }) {
   const productsPerPage = 24;
 
   const load = useCallback(async () => {
-    const [productResult, transactionResult] = await Promise.all([
+    const [productResult, transactionResult, shiftResult] = await Promise.all([
       api('/products', { token }),
-      api('/transactions?limit=5', { token })
+      api('/transactions?limit=5', { token }),
+      api('/shifts/current', { token })
     ]);
     setProducts(productResult.products);
     setTransactions(transactionResult.transactions);
+    setShift(shiftResult.shift);
+    setShiftTotals(shiftResult.totals);
     try {
       const customerResult = await api('/customers?limit=100', { token });
       setCustomers(customerResult.customers);
@@ -60,7 +76,82 @@ export default function CashierDashboard({ token }) {
     return sum + (product ? Number(product.unit_price) * item.quantity : 0);
   }, 0);
 
+  async function openShift(event) {
+    event.preventDefault();
+    const amount = parseCashAmount(openingFloat);
+    if (amount === null) {
+      setError('Enter an opening float with no more than two decimal places');
+      return;
+    }
+    setShiftBusy(true);
+    setError('');
+    setShiftNotice('');
+    try {
+      const result = await api('/shifts', {
+        token,
+        method: 'POST',
+        body: JSON.stringify({ openingFloat: amount })
+      });
+      setShift(result.shift);
+      setShiftTotals(result.totals);
+      setShiftNotice('Shift opened.');
+    } catch (reason) {
+      setError(reason.message);
+    } finally {
+      setShiftBusy(false);
+    }
+  }
+
+  async function closeShift(event) {
+    event.preventDefault();
+    if (!shift) return;
+    if (cart.length) {
+      setError('Clear the current sale before closing the shift');
+      return;
+    }
+    const amount = parseCashAmount(closingCash);
+    if (amount === null) {
+      setError('Enter counted cash with no more than two decimal places');
+      return;
+    }
+    setShiftBusy(true);
+    setError('');
+    setShiftNotice('');
+    try {
+      const result = await api(`/shifts/${shift.id}/close`, {
+        token,
+        method: 'POST',
+        body: JSON.stringify({ closingCash: amount })
+      });
+      setShift(null);
+      setShiftTotals(null);
+      setShowCloseShift(false);
+      setShiftNotice(`Shift closed. Cash difference: ${money(result.shift.cash_difference)}.`);
+    } catch (reason) {
+      setError(reason.message);
+    } finally {
+      setShiftBusy(false);
+    }
+  }
+
+  function beginClosingShift() {
+    if (cart.length) {
+      setError('Clear the current sale before closing the shift');
+      return;
+    }
+    setClosingCash(shiftTotals?.expected_cash ?? '0.00');
+    setShowCloseShift(true);
+  }
+
   function addToCart(product) {
+    if (!shift) {
+      setError('Open a cashier shift before starting a sale');
+      return;
+    }
+    if (showCloseShift) {
+      setError('Cancel shift closing before starting a sale');
+      return;
+    }
     const existing = cart.find((item) => item.productId === product.id);
     if (product.stock_quantity < 1 || (existing && existing.quantity >= product.stock_quantity)) {
       setError('Requested quantity exceeds available stock');
@@ -112,13 +203,50 @@ export default function CashierDashboard({ token }) {
 
   return (
     <section className="page-content pos-page">
-      <div className="pos-status-strip"><div className="pos-status-main"><span className="status-orb" /><div><strong>Register active</strong><small>Ready for transactions</small></div></div><div className="pos-status-meta"><span>{clock.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span><span><b>{clock.toLocaleTimeString()}</b></span></div></div>
+      {shift ? (
+        <article className="shift-banner active">
+          <div className="shift-banner-main">
+            <span className="shift-orb" />
+            <div className="shift-banner-content">
+              <div className="shift-banner-title"><strong>Shift Active</strong><span>Opened {new Date(shift.opened_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span></div>
+              <div className="shift-metrics">
+                <span>Float: <strong>{money(shift.opening_float)}</strong></span>
+                <span>Cash Sales: <strong>{money(shiftTotals?.cash_sales || 0)}</strong></span>
+                <span>GCash Sales: <strong>{money(shiftTotals?.gcash_sales || 0)}</strong></span>
+                <span>Expected Cash: <strong>{money(shiftTotals?.expected_cash || shift.opening_float)}</strong></span>
+              </div>
+            </div>
+            {!showCloseShift && <button className="shift-action" type="button" onClick={beginClosingShift}>Close shift</button>}
+          </div>
+          {showCloseShift && <form className="shift-close-form" onSubmit={closeShift}>
+            <label>Counted cash<input type="number" min="0" step="0.01" required value={closingCash} onChange={(event) => setClosingCash(event.target.value)} /></label>
+            <span>Expected: {money(shiftTotals?.expected_cash || shift.opening_float)}</span>
+            <button className="shift-action" type="submit" disabled={shiftBusy}>{shiftBusy ? 'Closing…' : 'Confirm close'}</button>
+            <button className="shift-cancel" type="button" onClick={() => setShowCloseShift(false)} disabled={shiftBusy}>Cancel</button>
+          </form>}
+        </article>
+      ) : (
+        <article className="shift-banner inactive">
+          <div className="shift-banner-main">
+            <span className="shift-orb" />
+            <div className="shift-banner-content">
+              <div className="shift-banner-title"><strong>No active shift</strong><span>Open a shift to start checkout</span></div>
+            </div>
+            <form className="shift-open-form" onSubmit={openShift}>
+              <label>Opening float<input type="number" min="0" step="0.01" required value={openingFloat} onChange={(event) => setOpeningFloat(event.target.value)} /></label>
+              <button className="shift-action" type="submit" disabled={shiftBusy}>{shiftBusy ? 'Opening…' : 'Open shift'}</button>
+            </form>
+          </div>
+        </article>
+      )}
+      {shiftNotice && <div className="success-banner shift-notice" role="status">{shiftNotice}</div>}
+      <div className="pos-status-strip"><div className="pos-status-main"><span className={`status-orb ${shift ? '' : 'inactive'}`} /><div><strong>{shift ? 'Register active' : 'Register closed'}</strong><small>{shift ? 'Ready for transactions' : 'Open a shift to enable checkout'}</small></div></div><div className="pos-status-meta"><span>{clock.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span><span><b>{clock.toLocaleTimeString()}</b></span></div></div>
       <div className="page-heading"><div><p className="eyebrow">CASHIER WORKSPACE</p><h1>Point of sale</h1><p className="muted">Search products, build a sale, and print customer receipts.</p></div></div>
       {error && <div className="error-banner" role="alert">{error}</div>}
       <div className="stat-grid cashier-stats"><StatCard label="Your recent transactions" value={transactions.length} detail="Most recent sales" icon="↗" tone="blue" /><StatCard label="Available products" value={products.filter((product) => product.stock_quantity > 0).length} detail="In-stock products" icon="▤" tone="orange" /><StatCard label="Current sale" value={money(total)} detail={`${cart.reduce((sum, item) => sum + item.quantity, 0)} items in cart`} icon="$" /></div>
       <div className="content-grid pos-grid">
         <article className="panel pos-products"><div className="panel-heading"><div><h2>Available products</h2><p>Search by product name or SKU</p></div></div><div className="pos-product-filters"><label className="search-box pos-search"><span>⌕</span><input value={search} onChange={(event) => { setSearch(event.target.value); setProductPage(1); }} placeholder="Search products…" /></label><select aria-label="Filter products by category" value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setProductPage(1); }}><option value="all">All categories</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select></div><div className="pos-product-list">
-          {pagedProducts.map((product) => <div className="pos-product-row" key={product.id}><div><strong>{product.name}</strong><small>{product.category || 'Uncategorized'} · {product.sku}</small></div><div className="pos-product-pricing"><strong>{money(product.unit_price)}</strong><small>{product.stock_quantity} stk</small></div><button className="outline-button" disabled={product.stock_quantity < 1} onClick={() => addToCart(product)}>Add</button></div>)}
+          {pagedProducts.map((product) => <div className="pos-product-row" key={product.id}><div><strong>{product.name}</strong><small>{product.category || 'Uncategorized'} · {product.sku}</small></div><div className="pos-product-pricing"><strong>{money(product.unit_price)}</strong><small>{product.stock_quantity} stk</small></div><button className="outline-button" disabled={!shift || showCloseShift || product.stock_quantity < 1} onClick={() => addToCart(product)}>Add</button></div>)}
           {filteredProducts.length === 0 && <div className="empty-chart">No available products match your search.</div>}
         </div>
         {filteredProducts.length > 0 && <div className="pos-pagination"><span>{((safeProductPage - 1) * productsPerPage) + 1}-{Math.min(safeProductPage * productsPerPage, filteredProducts.length)} of {filteredProducts.length} products</span><div><button type="button" className="outline-button" disabled={safeProductPage === 1} onClick={() => setProductPage((page) => Math.max(1, page - 1))}>← Prev</button><span>Page {safeProductPage} / {productPageCount}</span><button type="button" className="outline-button" disabled={safeProductPage === productPageCount} onClick={() => setProductPage((page) => Math.min(productPageCount, page + 1))}>Next →</button></div></div>}
@@ -145,7 +273,7 @@ export default function CashierDashboard({ token }) {
           {paymentMethod === 'cash' && tendered !== '' && <div className="change-row"><span>Change</span><strong>{money(Math.max(0, Number(tendered) - total))}</strong></div>}
           <div className="cart-actions">
             {cart.length > 0 && <button className="outline-button clear-cart" type="button" onClick={() => { setCart([]); setTendered(''); }}>Clear</button>}
-            <button className="primary-button checkout-button" disabled={busy || !cart.length || (paymentMethod === 'cash' && Number(tendered) < total)} onClick={checkout}>{busy ? 'Processing…' : 'Complete sale'} <span>→</span></button>
+            <button className="primary-button checkout-button" disabled={!shift || showCloseShift || busy || !cart.length || (paymentMethod === 'cash' && Number(tendered) < total)} onClick={checkout}>{busy ? 'Processing…' : 'Complete sale'} <span>→</span></button>
           </div>
         </article>
       </div>

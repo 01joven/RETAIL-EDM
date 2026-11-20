@@ -55,12 +55,32 @@ CREATE TABLE IF NOT EXISTS customers (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS cashier_shifts (
+  id BIGSERIAL PRIMARY KEY,
+  cashier_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  opening_float NUMERIC(12, 2) NOT NULL DEFAULT 10 CHECK (opening_float >= 0),
+  closed_at TIMESTAMPTZ,
+  closing_cash NUMERIC(12, 2) CHECK (closing_cash >= 0),
+  cash_difference NUMERIC,
+  CHECK (closed_at IS NULL OR closed_at >= opened_at),
+  CHECK (
+    (closed_at IS NULL AND closing_cash IS NULL AND cash_difference IS NULL)
+    OR (closed_at IS NOT NULL AND closing_cash IS NOT NULL AND cash_difference IS NOT NULL)
+  )
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS cashier_shifts_one_active_per_cashier_idx
+  ON cashier_shifts (cashier_user_id)
+  WHERE closed_at IS NULL;
+
 CREATE TABLE IF NOT EXISTS transactions (
   id BIGSERIAL PRIMARY KEY,
   external_id TEXT NOT NULL UNIQUE,
   occurred_at TIMESTAMPTZ NOT NULL,
   processed_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
   customer_id BIGINT REFERENCES customers(id) ON DELETE SET NULL,
+  shift_id BIGINT REFERENCES cashier_shifts(id) ON DELETE SET NULL,
   status TEXT NOT NULL DEFAULT 'completed' CHECK (status IN ('completed', 'voided', 'refunded')),
   total NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (total >= 0),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -76,6 +96,7 @@ ALTER TABLE transactions ADD COLUMN IF NOT EXISTS sales_channel TEXT NOT NULL DE
 
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS processed_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS customer_id BIGINT REFERENCES customers(id) ON DELETE SET NULL;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS shift_id BIGINT REFERENCES cashier_shifts(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS transaction_items (
   id BIGSERIAL PRIMARY KEY,
@@ -98,6 +119,7 @@ CREATE INDEX IF NOT EXISTS transactions_occurred_at_idx ON transactions (occurre
 CREATE INDEX IF NOT EXISTS transactions_status_idx ON transactions (status);
 CREATE INDEX IF NOT EXISTS transactions_processed_by_user_id_idx ON transactions (processed_by_user_id, occurred_at DESC);
 CREATE INDEX IF NOT EXISTS transactions_customer_id_idx ON transactions (customer_id);
+CREATE INDEX IF NOT EXISTS transactions_shift_id_idx ON transactions (shift_id);
 CREATE INDEX IF NOT EXISTS transaction_items_transaction_id_idx ON transaction_items (transaction_id);
 
 CREATE TABLE IF NOT EXISTS audit_events (

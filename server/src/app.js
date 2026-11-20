@@ -14,6 +14,7 @@ import auditRoutes from './routes/audit.js';
 import { pool } from './config/db.js';
 import integrationRoutes from './routes/integration.js';
 import customerRoutes from './routes/customers.js';
+import shiftRoutes from './routes/shifts.js';
 import { errorHandler, notFound } from './middleware/errors.js';
 
 const app = express();
@@ -41,6 +42,7 @@ app.use('/api/v1/transactions', transactionRoutes);
 app.use('/api/v1/reports', reportRoutes);
 app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/customers', customerRoutes);
+app.use('/api/v1/shifts', shiftRoutes);
 app.use('/api/v1/settings', settingsRoutes);
 app.use('/api/v1/audit', auditRoutes);
 app.use('/api/v1/integration', integrationRoutes);

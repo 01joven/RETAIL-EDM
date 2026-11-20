@@ -56,15 +56,19 @@ The code expires after 10 minutes and can be tried up to five times. If recovery
 
 The **Point of sale** page is available to cashiers.
 
-1. Search for a product by name or SKU, or filter by category.
-2. Select **Add** for each product. Use the quantity field in the cart to change the quantity, or **×** to remove an item.
-3. Check the cart items and total.
-4. Optionally select an existing customer, or leave **Walk-in customer** selected.
-5. Select the sales channel: **Physical store** or **E-commerce**.
-6. Select the payment method: **Cash** or **GCash**.
-7. For cash, enter the amount received. The screen shows the change due; cash checkout is disabled if the tender is less than the total.
-8. Select **Complete sale**.
-9. Review the receipt. Select **Print receipt** to print it, or **Done** to close it.
+1. Open a shift from the green shift panel before checkout. The opening float defaults to ₱10.00 and can be changed. Only one shift can be active per cashier.
+2. Search for a product by name or SKU, or filter by category.
+3. Check the shift panel's cash sales, GCash sales, and expected cash. Expected cash is the opening float plus completed cash sales for this shift.
+4. Select **Add** for each product. Use the quantity field in the cart to change the quantity, or **×** to remove an item.
+5. Check the cart items and total.
+6. Optionally select an existing customer, or leave **Walk-in customer** selected.
+7. Select the sales channel: **Physical store** or **E-commerce**.
+8. Select the payment method: **Cash** or **GCash**.
+9. For cash, enter the amount received. The screen shows the change due; cash checkout is disabled if the tender is less than the total.
+10. Select **Complete sale**.
+11. Review the receipt. Select **Print receipt** to print it, or **Done** to close it.
+
+To finish a shift, select **Close shift**, enter the counted cash, and confirm. The system records the cash difference from the expected amount. A new shift must be opened before that cashier can check out again.
 
 The price is taken from the product catalog. Completing a sale reduces the stock quantity for each item. The cashier screen also shows
 the signed-in cashier's recent sales.

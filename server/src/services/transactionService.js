@@ -17,11 +17,25 @@ export async function createTransaction({
   paymentMethod = 'cash',
   tendered = null,
   salesChannel = 'store',
-  customerId = null
+  customerId = null,
+  shiftId = null
 }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    if (shiftId !== null) {
+      const shift = await client.query(
+        `SELECT id FROM cashier_shifts
+         WHERE id = $1 AND cashier_user_id = $2 AND closed_at IS NULL
+         FOR UPDATE`,
+        [shiftId, processedByUserId]
+      );
+      if (!shift.rowCount) {
+        const error = new Error('The active shift has closed; open a new shift before completing a sale');
+        error.status = 409;
+        throw error;
+      }
+    }
     if (customerId !== null) {
       const customer = await client.query('SELECT id FROM customers WHERE id = $1', [customerId]);
       if (!customer.rowCount) {
@@ -32,15 +46,15 @@ export async function createTransaction({
     }
     const transactionResult = await client.query(
       `INSERT INTO transactions
-         (external_id, occurred_at, processed_by_user_id, payment_method, sales_channel, customer_id)
-       VALUES ($1, $2, $3, $4, $5, $6)
+         (external_id, occurred_at, processed_by_user_id, payment_method, sales_channel, customer_id, shift_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (external_id) DO NOTHING
-       RETURNING id, external_id, occurred_at, processed_by_user_id, status, total, payment_method, tendered, change_amount, sales_channel, customer_id`,
-      [externalId, occurredAt, processedByUserId, paymentMethod, salesChannel, customerId]
+       RETURNING id, external_id, occurred_at, processed_by_user_id, status, total, payment_method, tendered, change_amount, sales_channel, customer_id, shift_id`,
+      [externalId, occurredAt, processedByUserId, paymentMethod, salesChannel, customerId, shiftId]
     );
     if (!transactionResult.rowCount) {
       const existing = await client.query(
-        'SELECT id, external_id, occurred_at, processed_by_user_id, status, total, payment_method, tendered, change_amount, sales_channel, customer_id FROM transactions WHERE external_id = $1',
+        'SELECT id, external_id, occurred_at, processed_by_user_id, status, total, payment_method, tendered, change_amount, sales_channel, customer_id, shift_id FROM transactions WHERE external_id = $1',
         [externalId]
       );
       if (processedByUserId !== null && String(existing.rows[0].processed_by_user_id) !== String(processedByUserId)) {
@@ -109,7 +123,7 @@ export async function createTransaction({
       `UPDATE transactions
        SET total = $1, tendered = $2, change_amount = $3
        WHERE id = $4
-       RETURNING id, external_id, occurred_at, processed_by_user_id, status, total, payment_method, tendered, change_amount, sales_channel, customer_id`,
+       RETURNING id, external_id, occurred_at, processed_by_user_id, status, total, payment_method, tendered, change_amount, sales_channel, customer_id, shift_id`,
       [centsToPrice(totalCents), centsToPrice(tenderedCents), centsToPrice(changeCents), transaction.id]
     );
     await client.query('COMMIT');

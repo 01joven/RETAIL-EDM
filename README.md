@@ -10,8 +10,9 @@ RetailFlow is a retail and e-commerce management system using POS as its data so
 - **Express API** (`server/src`) validates input, authenticates dashboard users with an eight-hour JWT, applies role checks, and executes parameterized PostgreSQL queries.
 - **POS data source and Real-Time API integration** send sales to `POST /api/v1/transactions/ingest` with the `x-pos-api-key` header. The API derives prices from the product catalog, persists each transaction and its items in one database transaction, and treats `externalId` as an idempotency key.
 - **Retail and e-commerce analytics** record the sales channel (`store` or `ecommerce`) and snapshot product categories on each sale, enabling channel and category reporting.
+- **Cashier shifts** track each cashier's opening float, completed cash and GCash sales, expected drawer cash, and counted cash at close. Cashier checkout requires an active shift.
 - **Integration monitoring** stores request metadata and outcomes (not request bodies or card data) for the admin API activity screen.
-- **PostgreSQL** stores users, products, customers, transactions, and transaction items. Roles are exactly `admin` and `cashier`; transaction item rows snapshot the product name, SKU, and unit price at sale time, and sales can optionally link to a customer.
+- **PostgreSQL** stores users, products, customers, cashier shifts, transactions, and transaction items. Roles are exactly `admin` and `cashier`; transaction item rows snapshot the product name, SKU, and unit price at sale time, and sales can optionally link to a customer.
 - **Reports** group completed transactions by day, week, or month. The date-range end is exclusive.
 - **Governance boundary**: PCI DSS is the selected governance requirement. The application excludes cardholder data and is not a PCI DSS certification; organizations must assess their full deployment and operating environment.
 
@@ -27,7 +28,7 @@ server/
   sql/schema.sql           PostgreSQL schema and indexes
   src/config/              Environment and database pool
   src/middleware/          Authentication, authorization, error responses
-  src/routes/              Auth, products, customers, transactions, reports, audit, integrations
+  src/routes/              Auth, products, customers, shifts, transactions, reports, audit, integrations
   src/services/            Transaction persistence
   src/scripts/              Schema migration and admin bootstrap
   test/                    Node test-runner tests
@@ -80,7 +81,7 @@ Requirements: Node.js 20+ and PostgreSQL 16+ (local or managed, such as Neon).
    npm run db:seed-products --prefix server
    ```
 
-   The migration adds cashier ownership, inventory stock, basic customer records with an optional transaction link, and enforces the two-role constraint while retaining existing transaction and product rows. The seed command reads `ADMIN_EMAIL` and `ADMIN_PASSWORD` from `server\.env`; it never installs a default password.
+   The migration adds cashier ownership, inventory stock, customer records, cashier shift tracking, and the two-role constraint while retaining existing transaction and product rows. Existing transactions remain unassigned to a shift. The seed command reads `ADMIN_EMAIL` and `ADMIN_PASSWORD` from `server\.env`; it never installs a default password.
 
 7. Start the frontend and API:
 
@@ -133,7 +134,10 @@ All endpoints are under `/api/v1`. Dashboard endpoints use `Authorization: Beare
 | `GET /settings` | Admin | View non-secret system settings |
 | `GET /transactions` | Admin or cashier | Search/date filter; admins see all, cashiers only their sales; max 100 |
 | `GET /transactions/:id` | Admin or owning cashier | View sale details and receipt |
-| `POST /transactions` | Admin or cashier | Create sale; authenticated user is recorded as processor |
+| `GET /shifts/current` | Cashier | View the active shift and cash/GCash totals |
+| `POST /shifts` | Cashier | Open a shift with an opening float (defaults to 10.00) |
+| `POST /shifts/:id/close` | Owning cashier | Close a shift with counted cash and record the cash difference |
+| `POST /transactions` | Admin or cashier | Create sale; cashier sales require an active shift |
 | `POST /transactions/ingest` | POS API key | Import a POS transaction |
 | `GET /reports/sales?period=daily\|weekly\|monthly` | Admin | Sales totals, transaction counts, average order, and period buckets |
 | `GET /integration/activity` | Admin | Recent POS API outcomes, request latency, and 24-hour counts |

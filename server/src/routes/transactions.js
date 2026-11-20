@@ -41,6 +41,19 @@ async function ingest(req, res, next) {
       });
       return res.status(400).json({ error: validationError });
     }
+    let shiftId = null;
+    if (req.user?.role === 'cashier') {
+      const activeShift = await pool.query(
+        'SELECT id FROM cashier_shifts WHERE cashier_user_id = $1 AND closed_at IS NULL',
+        [req.user.id]
+      );
+      if (!activeShift.rowCount) {
+        const error = new Error('Open a cashier shift before completing a sale');
+        error.status = 409;
+        throw error;
+      }
+      shiftId = activeShift.rows[0].id;
+    }
     const result = await createTransaction({
       externalId: req.body.externalId.trim(),
       occurredAt: new Date(req.body.occurredAt).toISOString(),
@@ -51,6 +64,7 @@ async function ingest(req, res, next) {
       customerId: req.body.customerId === undefined || req.body.customerId === null
         ? null
         : Number(req.body.customerId),
+      shiftId,
       items: req.body.items.map((item) => ({ productId: Number(item.productId), quantity: item.quantity }))
     });
     if (!result.duplicate) await writeAudit(req, 'transaction.created', result.transaction.id, {
