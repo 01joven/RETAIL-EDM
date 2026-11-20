@@ -7,6 +7,9 @@ router.get('/', authenticate, authorize('admin'), (req, res) => {
     apiVersion: 'v1',
     posIntegration: 'api-key',
     cardholderDataStorage: false,
+    realtimeIngestion: 'rest-api',
+    auditRetention: 'up to 200 recent events',
+    voidAndRefundEnabled: true,
     roles: ['admin', 'cashier']
   });
 });

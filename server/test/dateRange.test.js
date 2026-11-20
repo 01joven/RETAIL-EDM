@@ -11,6 +11,8 @@ test('parses valid inclusive start and exclusive end timestamps', () => {
 
 test('rejects invalid and reversed date ranges', () => {
   assert.equal(parseDateRange({ from: 'not-a-date' }).error, 'from and to must be valid date strings');
+  assert.equal(parseDateRange({ from: '2026-02-30' }).error, 'from and to must be valid date strings');
+  assert.equal(parseDateRange({ to: '2026-02-30T12:00:00Z' }).error, 'from and to must be valid date strings');
   assert.equal(parseDateRange({ from: '2026-01-03', to: '2026-01-02' }).error, 'from must be earlier than to');
 });
 

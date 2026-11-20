@@ -1,28 +1,33 @@
-# RetailFlow POS Data Integration
+# RetailFlow Retail & E-commerce Management System
 
-RetailFlow is a React dashboard and Express REST API for importing POS sales into PostgreSQL and reviewing sales reports. It does not accept or store payment-card numbers, CVV values, or other cardholder data.
+For end-user and administrator guidance, see [USER_GUIDE.md](./USER_GUIDE.md).
+
+RetailFlow is a retail and e-commerce management system using POS as its data source, Real-Time APIs as its integration method, PCI DSS as a governance requirement, and Sales Analytics as its output. It does not accept or store payment-card numbers, CVV values, or other cardholder data, and it does not claim PCI DSS certification.
 
 ## Architecture
 
 - **React/Vite frontend** (`client/src`) calls the versioned API and keeps its access token in memory only.
 - **Express API** (`server/src`) validates input, authenticates dashboard users with an eight-hour JWT, applies role checks, and executes parameterized PostgreSQL queries.
-- **POS integration** sends sales to `POST /api/v1/transactions/ingest` with the `x-pos-api-key` header. The API derives prices from the product catalog, persists each transaction and its items in one database transaction, and treats `externalId` as an idempotency key.
-- **PostgreSQL** stores users, products, transactions, and transaction items. Roles are exactly `admin` and `cashier`; transaction item rows snapshot the product name, SKU, and unit price at sale time.
+- **POS data source and Real-Time API integration** send sales to `POST /api/v1/transactions/ingest` with the `x-pos-api-key` header. The API derives prices from the product catalog, persists each transaction and its items in one database transaction, and treats `externalId` as an idempotency key.
+- **Retail and e-commerce analytics** record the sales channel (`store` or `ecommerce`) and snapshot product categories on each sale, enabling channel and category reporting.
+- **Integration monitoring** stores request metadata and outcomes (not request bodies or card data) for the admin API activity screen.
+- **PostgreSQL** stores users, products, customers, transactions, and transaction items. Roles are exactly `admin` and `cashier`; transaction item rows snapshot the product name, SKU, and unit price at sale time, and sales can optionally link to a customer.
 - **Reports** group completed transactions by day, week, or month. The date-range end is exclusive.
+- **Governance boundary**: PCI DSS is the selected governance requirement. The application excludes cardholder data and is not a PCI DSS certification; organizations must assess their full deployment and operating environment.
 
 ## Folder structure
 
 ```text
 client/
   src/api/                 API client
-  src/components/          Login, role dashboards, catalog, users, transactions, reports, settings
+  src/components/          Login, role dashboards, catalog, customers, users, transactions, reports, settings
   src/App.jsx              Application state and page routing
   src/styles.css           Responsive dashboard styles
 server/
   sql/schema.sql           PostgreSQL schema and indexes
   src/config/              Environment and database pool
   src/middleware/          Authentication, authorization, error responses
-  src/routes/              Auth, products, transactions, reports
+  src/routes/              Auth, products, customers, transactions, reports, audit, integrations
   src/services/            Transaction persistence
   src/scripts/              Schema migration and admin bootstrap
   test/                    Node test-runner tests
@@ -72,9 +77,10 @@ Requirements: Node.js 20+ and PostgreSQL 16+ (local or managed, such as Neon).
    ```powershell
    npm run db:migrate --prefix server
    npm run db:seed-admin --prefix server
+   npm run db:seed-products --prefix server
    ```
 
-   The migration adds cashier ownership and inventory stock, and enforces the two-role constraint while retaining existing transaction and product rows. The seed command reads `ADMIN_EMAIL` and `ADMIN_PASSWORD` from `server\.env`; it never installs a default password.
+   The migration adds cashier ownership, inventory stock, basic customer records with an optional transaction link, and enforces the two-role constraint while retaining existing transaction and product rows. The seed command reads `ADMIN_EMAIL` and `ADMIN_PASSWORD` from `server\.env`; it never installs a default password.
 
 7. Start the frontend and API:
 
@@ -110,10 +116,13 @@ All endpoints are under `/api/v1`. Dashboard endpoints use `Authorization: Beare
 |---|---|---|
 | `GET /health` | Public | API health check |
 | `POST /auth/login` | Public, rate-limited | Issue JWT |
+| `POST /auth/logout` | Authenticated | Revoke active JWTs for the account |
 | `POST /auth/forgot-password` | Public, rate-limited | Request a one-time email verification code |
 | `POST /auth/reset-password` | Public, rate-limited | Reset password with a valid code |
 | `GET /auth/me` | Authenticated | Current user |
 | `GET /products` | Admin or cashier | List products and stock; cashiers see active products only |
+| `GET /customers` | Admin or cashier | Search up to 100 basic customer records |
+| `POST /customers` | Admin or cashier | Add a customer name with optional email and phone |
 | `POST /products` | Admin | Create a product with initial stock |
 | `PATCH /products/:id` | Admin | Update product details, active status, or stock |
 | `DELETE /products/:id` | Admin | Deactivate product without removing historical references |
@@ -127,6 +136,8 @@ All endpoints are under `/api/v1`. Dashboard endpoints use `Authorization: Beare
 | `POST /transactions` | Admin or cashier | Create sale; authenticated user is recorded as processor |
 | `POST /transactions/ingest` | POS API key | Import a POS transaction |
 | `GET /reports/sales?period=daily\|weekly\|monthly` | Admin | Sales totals, transaction counts, average order, and period buckets |
+| `GET /integration/activity` | Admin | Recent POS API outcomes, request latency, and 24-hour counts |
+| `GET /audit` | Admin | Recent administrative and transaction audit events |
 
 Role authorization is enforced by Express and the current database role is reloaded on each authenticated request, so role changes and deleted accounts invalidate existing access immediately. Cashiers cannot manage products/users/settings or access administrative sales reports.
 
@@ -136,6 +147,9 @@ POS ingestion body:
 {
   "externalId": "STORE-01-000123",
   "occurredAt": "2026-11-17T09:30:00Z",
+  "salesChannel": "store",
+  "paymentMethod": "cash",
+  "customerId": 1,
   "items": [
     { "productId": 1, "quantity": 2 }
   ]
@@ -143,6 +157,8 @@ POS ingestion body:
 ```
 
 Required header: `x-pos-api-key: <POS_API_KEY>`. Do not include payment-card fields. Repeated `externalId` values return the previously saved transaction rather than inserting a duplicate.
+`salesChannel` may be `store` or `ecommerce`; it defaults to `store` for earlier integrations. Reports use category snapshots captured when each sale is recorded.
+`customerId` is optional and must identify an existing customer record when provided.
 
 ## Verification
 

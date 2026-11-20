@@ -42,6 +42,19 @@ router.post('/login', loginLimiter, async (req, res, next) => {
   }
 });
 
+router.post('/logout', authenticate, async (req, res, next) => {
+  try {
+    const result = await pool.query(
+      'UPDATE users SET token_version = token_version + 1 WHERE id = $1 RETURNING id',
+      [req.user.id]
+    );
+    if (!result.rowCount) return res.status(401).json({ error: 'Account is no longer available' });
+    return res.status(204).end();
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/forgot-password', recoveryLimiter, async (req, res, next) => {
   const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
   if (!isValidEmail(email)) return res.status(400).json({ error: 'Enter a valid email address' });
