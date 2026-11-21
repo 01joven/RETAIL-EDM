@@ -72,10 +72,10 @@ router.get('/current', async (req, res, next) => {
 });
 
 router.post('/', async (req, res, next) => {
-  const openingFloat = req.body.openingFloat === undefined
-    ? defaultOpeningFloat
-    : req.body.openingFloat;
-  if (!isValidMoney(openingFloat)) {
+  let openingFloat = req.user.role === 'admin'
+    ? (req.body.openingFloat === undefined ? defaultOpeningFloat : req.body.openingFloat)
+    : null;
+  if (req.user.role === 'admin' && !isValidMoney(openingFloat)) {
     return res.status(400).json({ error: 'openingFloat must be a non-negative amount with up to two decimals' });
   }
 
@@ -83,6 +83,21 @@ router.post('/', async (req, res, next) => {
   try {
     client = await pool.connect();
     await client.query('BEGIN');
+    if (req.user.role === 'cashier') {
+      const cashier = await client.query(
+        'SELECT pending_opening_float::text AS pending_opening_float FROM users WHERE id = $1 FOR UPDATE',
+        [req.user.id]
+      );
+      if (!cashier.rowCount || cashier.rows[0].pending_opening_float === null) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'Ask an admin to assign your opening float before opening a shift' });
+      }
+      openingFloat = Number(cashier.rows[0].pending_opening_float);
+    }
+    if (!isValidMoney(openingFloat)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'openingFloat must be a non-negative amount with up to two decimals' });
+    }
     const result = await client.query(
       `INSERT INTO cashier_shifts (cashier_user_id, opening_float)
        VALUES ($1, $2)
@@ -95,6 +110,9 @@ router.post('/', async (req, res, next) => {
       return res.status(409).json({ error: 'A shift is already active for this cashier' });
     }
     const shift = result.rows[0];
+    if (req.user.role === 'cashier') {
+      await client.query('UPDATE users SET pending_opening_float = NULL WHERE id = $1', [req.user.id]);
+    }
     await client.query(
       `INSERT INTO audit_events (actor_user_id, actor_email, action, entity_type, entity_id, details)
        VALUES ($1, $2, 'shift.opened', 'cashier_shift', $3, $4::jsonb)`,
@@ -147,6 +165,9 @@ router.post('/:id/close', async (req, res, next) => {
                  cash_difference::text AS cash_difference`,
       [closingCash.toFixed(2), difference, id]
     );
+    if (req.user.role === 'cashier') {
+      await client.query('UPDATE users SET pending_opening_float = NULL WHERE id = $1', [req.user.id]);
+    }
     await client.query(
       `INSERT INTO audit_events (actor_user_id, actor_email, action, entity_type, entity_id, details)
        VALUES ($1, $2, 'shift.closed', 'cashier_shift', $3, $4::jsonb)`,

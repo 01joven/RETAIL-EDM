@@ -2,6 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { pool } from '../config/db.js';
 import { authenticate, authorize } from '../middleware/auth.js';
+import { isValidMoney } from '../utils/shiftMetrics.js';
 
 const router = Router();
 router.use(authenticate, authorize('admin'));
@@ -14,7 +15,8 @@ function validEmail(value) {
 router.get('/', async (req, res, next) => {
   try {
     const result = await pool.query(
-      'SELECT id, email, role, created_at FROM users ORDER BY created_at DESC'
+      `SELECT id, email, role, pending_opening_float::text AS pending_opening_float, created_at
+       FROM users ORDER BY created_at DESC`
     );
     res.json({ users: result.rows });
   } catch (error) {
@@ -51,12 +53,13 @@ router.patch('/:id', async (req, res, next) => {
   try {
     client = await pool.connect();
     const id = Number(req.params.id);
-    const { email, password, role } = req.body;
+    const { email, password, role, pendingOpeningFloat } = req.body;
     if (!Number.isSafeInteger(id) || id < 1 ||
         (email !== undefined && !validEmail(email)) ||
         (password !== undefined && (typeof password !== 'string' || password.length < 12 || password.length > 256)) ||
+        (pendingOpeningFloat !== undefined && !isValidMoney(pendingOpeningFloat)) ||
         (role !== undefined && role !== 'cashier') ||
-        (email === undefined && password === undefined && role === undefined)) {
+        (email === undefined && password === undefined && role === undefined && pendingOpeningFloat === undefined)) {
       return res.status(400).json({ error: 'Provide a valid user id and at least one valid field to update' });
     }
     if (id === Number(req.user.id) && role !== undefined) {
@@ -71,6 +74,11 @@ router.patch('/:id', async (req, res, next) => {
       await client.query('ROLLBACK');
       transactionStarted = false;
       return res.status(404).json({ error: 'User not found' });
+    }
+    if (pendingOpeningFloat !== undefined && target.rows[0].role !== 'cashier') {
+      await client.query('ROLLBACK');
+      transactionStarted = false;
+      return res.status(400).json({ error: 'Opening floats can only be assigned to cashier accounts' });
     }
     if (target.rows[0].role === 'admin' && role === 'cashier') {
       const admins = await client.query("SELECT COUNT(*)::integer AS count FROM users WHERE role = 'admin'");
@@ -87,11 +95,31 @@ router.patch('/:id', async (req, res, next) => {
        SET email = COALESCE($2, email),
            password_hash = COALESCE($3, password_hash),
            role = COALESCE($4, role),
-           token_version = token_version + CASE WHEN $3::text IS NULL THEN 0 ELSE 1 END
+           token_version = token_version + CASE WHEN $3::text IS NULL THEN 0 ELSE 1 END,
+           pending_opening_float = CASE WHEN $5::boolean THEN $6::numeric ELSE pending_opening_float END
        WHERE id = $1
-       RETURNING id, email, role, created_at`,
-      [id, email === undefined ? null : email.trim().toLowerCase(), passwordHash, role ?? null]
+       RETURNING id, email, role, pending_opening_float::text AS pending_opening_float, created_at`,
+      [
+        id,
+        email === undefined ? null : email.trim().toLowerCase(),
+        passwordHash,
+        role ?? null,
+        pendingOpeningFloat !== undefined,
+        pendingOpeningFloat ?? null
+      ]
     );
+    if (pendingOpeningFloat !== undefined) {
+      await client.query(
+        `INSERT INTO audit_events (actor_user_id, actor_email, action, entity_type, entity_id, details)
+         VALUES ($1, $2, 'shift.float_assigned', 'cashier_user', $3, $4::jsonb)`,
+        [
+          req.user.id,
+          req.user.email,
+          String(id),
+          JSON.stringify({ pendingOpeningFloat: pendingOpeningFloat.toFixed(2) })
+        ]
+      );
+    }
     await client.query('COMMIT');
     transactionStarted = false;
     res.json({ user: updated.rows[0] });

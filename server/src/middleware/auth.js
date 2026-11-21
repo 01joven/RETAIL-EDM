@@ -19,7 +19,7 @@ export async function authenticate(req, res, next) {
     );
     if (!user.rowCount) return res.status(401).json({ error: 'Account is no longer available' });
     if (claims.tokenVersion !== user.rows[0].token_version) {
-      return res.status(401).json({ error: 'Session is no longer valid; please sign in again' });
+      return res.status(401).json({ error: 'Authentication required' });
     }
     req.user = {
       id: user.rows[0].id,

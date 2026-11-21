@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0 CHECK (token_version >= 0);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_opening_float NUMERIC(12, 2)
+  CHECK (pending_opening_float >= 0);
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 DO $migration$
 BEGIN

@@ -6,8 +6,7 @@ const adminNavItems = [
   ['Sales analytics', 'reports', 'reports'],
   ['Users', 'users', 'users'],
   ['Audit log', 'audit', 'audit'],
-  ['API activity', 'activity', 'integration'],
-  ['Settings', 'settings', 'settings']
+  ['API activity', 'activity', 'integration']
 ];
 const cashierNavItems = [
   ['Point of sale', 'overview', 'dashboard'],
@@ -22,8 +21,7 @@ const iconShapes = {
   reports: <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></>,
   users: <><circle cx="9" cy="8" r="3" /><path d="M3 20v-1a6 6 0 0 1 12 0v1M16 5a3 3 0 0 1 0 6" /></>,
   audit: <><path d="M12 3 20 6v5c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6l8-3Z" /><path d="m8.5 12 2.2 2.2 4.8-4.8" /></>,
-  activity: <><path d="M4 7h15M15 3l4 4-4 4M20 17H5m4-4-4 4 4 4" /></>,
-  settings: <><circle cx="12" cy="12" r="3" /><path d="m19.4 15 .1.1 1.4 1.1-1.5 2.6-1.7-.7a8 8 0 0 1-1.5.9l-.3 1.8h-3l-.3-1.8a8 8 0 0 1-1.5-.9l-1.7.7-1.5-2.6 1.4-1.1a7 7 0 0 1 0-1.8l-1.4-1.1 1.5-2.6 1.7.7a8 8 0 0 1 1.5-.9l.3-1.8h3l.3 1.8a8 8 0 0 1 1.5.9l1.7-.7 1.5 2.6-1.4 1.1a7 7 0 0 1 0 1.7Z" /></>
+  activity: <><path d="M4 7h15M15 3l4 4-4 4M20 17H5m4-4-4 4 4 4" /></>
 };
 
 function NavIcon({ name }) {

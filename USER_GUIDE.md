@@ -38,7 +38,7 @@ see only the cashier menu. Cashier accounts are created by an administrator. Eac
 1. Open the RetailFlow application URL provided by your administrator.
 2. Enter your registered email address and password in the single sign-in form.
 3. Select **Sign in**.
-4. Select **Sign out** from the user panel when finished. This ends the local session and invalidates active access tokens for the account.
+4. Refreshing the page in the same browser tab keeps the current page and session. Select **Sign out** from the user panel when finished; this ends the local session and invalidates active access tokens for the account.
 
 RetailFlow uses the account's assigned role to open the correct workspace: admins land on **Overview**, while cashiers land on
 **Point of sale**. The login form detects the role from the authenticated account; there is no separate login page or role selector.
@@ -56,7 +56,7 @@ The code expires after 10 minutes and can be tried up to five times. If recovery
 
 The **Point of sale** page is available to admins and cashiers. An admin can use it whenever a cashier is unavailable.
 
-1. Cashiers must open a shift before checkout. Admins can sell without an active shift, or open one to track drawer cash. The opening float defaults to ₱10.00 and can be changed. Only one shift can be active per account.
+1. Before a cashier opens a shift, an admin assigns the next opening float from **Users**. The cashier then selects **Open shift** and can see the assigned float. The assignment is used once. Admins can sell without an active shift, or open their own shift and set its float. Only one shift can be active per account.
 2. Search for a product by name or SKU, or filter by category.
 3. Check today's sales, including the cash and GCash totals. Cashiers see their own sales; admins see the store totals. While a shift is active, the panel also shows that shift's cash and GCash totals and expected cash.
 4. Select **Add** for each product. Use the quantity field in the cart to change the quantity, or **×** to remove an item.

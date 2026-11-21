@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client.js';
+import { money } from '../api/money.js';
 
 const initialForm = { email: '', password: '' };
 
@@ -21,14 +22,6 @@ export default function UserManagement({ token, currentUser }) {
     } catch (reason) { setError(reason.message); }
   }
 
-  async function changeRole(user, role) {
-    try {
-      await api(`/users/${user.id}`, { token, method: 'PATCH', body: JSON.stringify({ role }) });
-      setError('');
-      await load();
-    } catch (reason) { setError(reason.message); }
-  }
-
   async function resetPassword(user) {
     const password = window.prompt(`Enter a new password of at least 12 characters for ${user.email}:`);
     if (password === null) return;
@@ -38,11 +31,19 @@ export default function UserManagement({ token, currentUser }) {
     } catch (reason) { setError(reason.message); }
   }
 
-  async function changeEmail(user) {
-    const email = window.prompt('Enter the verified email address for this account:', user.email);
-    if (email === null || email.trim() === user.email) return;
+  async function setOpeningFloat(user) {
+    const value = window.prompt(`Set the next opening float for ${user.email}:`, user.pending_opening_float ?? '');
+    if (value === null) return;
+    if (!/^\d+(?:\.\d{1,2})?$/.test(value.trim())) {
+      setError('Enter an opening float with no more than two decimal places');
+      return;
+    }
     try {
-      await api(`/users/${user.id}`, { token, method: 'PATCH', body: JSON.stringify({ email: email.trim() }) });
+      await api(`/users/${user.id}`, {
+        token,
+        method: 'PATCH',
+        body: JSON.stringify({ pendingOpeningFloat: Number(value) })
+      });
       setError('');
       await load();
     } catch (reason) { setError(reason.message); }
@@ -59,7 +60,7 @@ export default function UserManagement({ token, currentUser }) {
 
   return (
     <section className="page-content">
-      <div className="page-heading"><div><p className="eyebrow">ACCESS CONTROL</p><h1>User management</h1><p className="muted">Create and manage the two supported account roles.</p></div></div>
+      <div className="page-heading"><div><p className="eyebrow">ACCESS CONTROL</p><h1>User management</h1><p className="muted">Create cashier accounts and manage user access.</p></div></div>
       {error && <div className="error-banner" role="alert">{error}</div>}
       <form className="panel product-form user-form" onSubmit={createUser}>
         <div><h2>Create cashier account</h2><p>New accounts created here are always cashiers.</p></div>
@@ -84,15 +85,15 @@ export default function UserManagement({ token, currentUser }) {
         <button className="primary-button">Create user <span>＋</span></button>
       </form>
       <article className="panel table-panel"><div className="table-toolbar"><div><h2>System users</h2><p>{users.length} accounts</p></div></div>
-        <div className="table-scroll"><table><thead><tr><th>EMAIL</th><th>ROLE</th><th>CREATED</th><th className="align-right">ACTIONS</th></tr></thead><tbody>
+        <div className="table-scroll"><table><thead><tr><th>EMAIL</th><th>ROLE</th><th>NEXT OPENING FLOAT</th><th>CREATED</th><th className="align-right">ACTIONS</th></tr></thead><tbody>
           {users.map((user) => {
             const isSelf = String(user.id) === String(currentUser.id);
-            return <tr key={user.id}><td><strong>{user.email}</strong>{isSelf && <span className="you-tag">YOU</span>}</td><td><span className={`status-pill ${user.role === 'admin' ? 'admin-role' : 'completed'}`}>{user.role}</span></td><td>{new Date(user.created_at).toLocaleDateString()}</td><td className="align-right user-actions">
-              <button className="text-button" onClick={() => changeEmail(user)}>Change email</button><button className="text-button" onClick={() => resetPassword(user)}>Reset password</button>
-              {!isSelf && <>{user.role === 'admin' && <button className="text-button" onClick={() => changeRole(user, 'cashier')}>Make cashier</button>}<button className="text-button danger-text" onClick={() => deleteUser(user)}>Delete</button></>}
+            return <tr key={user.id}><td><strong>{user.email}</strong>{isSelf && <span className="you-tag">YOU</span>}</td><td><span className={`status-pill ${user.role === 'admin' ? 'admin-role' : 'completed'}`}>{user.role}</span></td><td>{user.role === 'cashier' ? <>{money(user.pending_opening_float ?? 0)} <button className="text-button" aria-label={`Set next opening float for ${user.email}`} onClick={() => setOpeningFloat(user)}>Set amount</button></> : '—'}</td><td>{new Date(user.created_at).toLocaleDateString()}</td><td className="align-right user-actions">
+              <button className="text-button" onClick={() => resetPassword(user)}>Reset password</button>
+              {!isSelf && <button className="text-button danger-text" onClick={() => deleteUser(user)}>Delete</button>}
             </td></tr>;
           })}
-          {users.length === 0 && <tr><td colSpan="4" className="table-empty">No users found.</td></tr>}
+          {users.length === 0 && <tr><td colSpan="5" className="table-empty">No users found.</td></tr>}
         </tbody></table></div>
       </article>
     </section>

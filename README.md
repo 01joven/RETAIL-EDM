@@ -1,12 +1,14 @@
 # RetailFlow Retail & E-commerce Management System
 
+**Live app:** [retail-edm.vercel.app](https://retail-edm.vercel.app/)
+
 For end-user and administrator guidance, see [USER_GUIDE.md](./USER_GUIDE.md).
 
 RetailFlow is a retail and e-commerce management system using POS as its data source, Real-Time APIs as its integration method, PCI DSS as a governance requirement, and Sales Analytics as its output. It does not accept or store payment-card numbers, CVV values, or other cardholder data, and it does not claim PCI DSS certification.
 
 ## Architecture
 
-- **React/Vite frontend** (`client/src`) calls the versioned API and keeps its access token in memory only.
+- **React/Vite frontend** (`client/src`) calls the versioned API and keeps its access token in tab-scoped session storage so refreshes preserve the current session.
 - **Express API** (`server/src`) validates input, authenticates dashboard users with an eight-hour JWT, applies role checks, and executes parameterized PostgreSQL queries.
 - **POS data source and Real-Time API integration** send sales to `POST /api/v1/transactions/ingest` with the `x-pos-api-key` header. The API derives prices from the product catalog, persists each transaction and its items in one database transaction, and treats `externalId` as an idempotency key.
 - **Retail and e-commerce analytics** record the sales channel (`store` or `ecommerce`) and snapshot product categories on each sale, enabling channel and category reporting.
@@ -129,13 +131,13 @@ All endpoints are under `/api/v1`. Dashboard endpoints use `Authorization: Beare
 | `DELETE /products/:id` | Admin | Deactivate product without removing historical references |
 | `GET /users` | Admin | List accounts |
 | `POST /users` | Admin | Create a cashier account (public registration is disabled) |
-| `PATCH /users/:id` | Admin | Change email, password, or demote another admin to cashier |
+| `PATCH /users/:id` | Admin | Change email/password, demote another admin to cashier, or assign a cashier's next opening float with `pendingOpeningFloat` |
 | `DELETE /users/:id` | Admin | Delete another account; cannot delete the final admin |
 | `GET /settings` | Admin | View non-secret system settings |
 | `GET /transactions` | Admin or cashier | Search/date filter; admins see all, cashiers only their sales; max 100 |
 | `GET /transactions/:id` | Admin or owning cashier | View sale details and receipt |
 | `GET /shifts/current` | Admin or cashier | View the active shift, shift totals, and today's sales (cashiers see their own sales; admins see store totals) |
-| `POST /shifts` | Admin or cashier | Open the signed-in user's shift with an opening float (defaults to 10.00) |
+| `POST /shifts` | Admin or cashier | Open the signed-in user's shift; cashiers must have a one-time opening float assigned by an admin first |
 | `POST /shifts/:id/close` | Admin or owning cashier | Close the signed-in user's shift with counted cash and record the cash difference |
 | `POST /transactions` | Admin or cashier | Create sale; cashier sales require an active shift, while admin shifts are optional |
 | `POST /transactions/ingest` | POS API key | Import a POS transaction |

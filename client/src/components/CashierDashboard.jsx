@@ -26,12 +26,12 @@ export default function CashierDashboard({ token, user }) {
   const [openingFloat, setOpeningFloat] = useState('10.00');
   const [closingCash, setClosingCash] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [salesChannel, setSalesChannel] = useState('store');
   const [tendered, setTendered] = useState('');
   const [clock, setClock] = useState(new Date());
   const [productPage, setProductPage] = useState(1);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const productsPerPage = 24;
+  const isAdmin = user.role === 'admin';
 
   const load = useCallback(async () => {
     const [productResult, transactionResult, shiftResult] = await Promise.all([
@@ -45,7 +45,7 @@ export default function CashierDashboard({ token, user }) {
     setShiftTotals(shiftResult.totals);
     setDailyTotals(shiftResult.dailyTotals);
     setError('');
-  }, [token]);
+  }, [token, isAdmin]);
   useEffect(() => {
     load().catch((reason) => setError(reason.message));
   }, [load]);
@@ -73,8 +73,8 @@ export default function CashierDashboard({ token, user }) {
 
   async function openShift(event) {
     event.preventDefault();
-    const amount = parseCashAmount(openingFloat);
-    if (amount === null) {
+    const amount = isAdmin ? parseCashAmount(openingFloat) : null;
+    if (isAdmin && amount === null) {
       setError('Enter an opening float with no more than two decimal places');
       return;
     }
@@ -85,7 +85,7 @@ export default function CashierDashboard({ token, user }) {
       const result = await api('/shifts', {
         token,
         method: 'POST',
-        body: JSON.stringify({ openingFloat: amount })
+        body: JSON.stringify(isAdmin ? { openingFloat: amount } : {})
       });
       setShift(result.shift);
       setShiftTotals(result.totals);
@@ -141,7 +141,7 @@ export default function CashierDashboard({ token, user }) {
   }
 
   function addToCart(product) {
-    if (!shift && user.role === 'cashier') {
+    if (!shift && !isAdmin) {
       setError('Open a shift before starting a sale');
       return;
     }
@@ -177,7 +177,6 @@ export default function CashierDashboard({ token, user }) {
           externalId: `POS-${crypto.randomUUID()}`,
           occurredAt: new Date().toISOString(),
           paymentMethod,
-          salesChannel,
           tendered: paymentMethod === 'cash' ? Number(tendered).toFixed(2) : undefined,
           items: cart
         })
@@ -187,7 +186,6 @@ export default function CashierDashboard({ token, user }) {
       setCart([]);
       setTendered('');
       setPaymentMethod('cash');
-      setSalesChannel('store');
       await load();
     } catch (reason) {
       setError(reason.message);
@@ -205,7 +203,7 @@ export default function CashierDashboard({ token, user }) {
             <div className="shift-banner-content">
               <div className="shift-banner-title"><strong>Shift Active</strong><span>Opened {new Date(shift.opened_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span></div>
               <div className="shift-metrics">
-                <span>Float: <strong>{money(shift.opening_float)}</strong></span>
+                <span>Opening float: <strong>{money(shift.opening_float)}</strong></span>
                 <span>Cash Sales: <strong>{money(shiftTotals?.cash_sales || 0)}</strong></span>
                 <span>GCash Sales: <strong>{money(shiftTotals?.gcash_sales || 0)}</strong></span>
                 <span>Expected Cash: <strong>{money(shiftTotals?.expected_cash || shift.opening_float)}</strong></span>
@@ -226,23 +224,23 @@ export default function CashierDashboard({ token, user }) {
           <div className="shift-banner-main">
             <span className="shift-orb" />
             <div className="shift-banner-content">
-              <div className="shift-banner-title"><strong>No active shift</strong><span>{user.role === 'admin' ? 'Admin checkout is available; open a shift to track drawer cash' : 'Open a shift to start checkout'}</span></div>
+              <div className="shift-banner-title"><strong>No active shift</strong><span>{isAdmin ? 'Admin checkout is available; open a shift to track drawer cash' : 'Ask an admin to assign your opening float before starting a shift'}</span></div>
             </div>
             <form className="shift-open-form" onSubmit={openShift}>
-              <label>Opening float<input type="number" min="0" step="0.01" required value={openingFloat} onChange={(event) => setOpeningFloat(event.target.value)} /></label>
+              {isAdmin && <label>Opening float<input type="number" min="0" step="0.01" required value={openingFloat} onChange={(event) => setOpeningFloat(event.target.value)} /></label>}
               <button className="shift-action" type="submit" disabled={shiftBusy}>{shiftBusy ? 'Opening…' : 'Open shift'}</button>
             </form>
           </div>
         </article>
       )}
       {shiftNotice && <div className="success-banner shift-notice" role="status">{shiftNotice}</div>}
-      <div className="pos-status-strip"><div className="pos-status-main"><span className={`status-orb ${shift ? '' : 'inactive'}`} /><div><strong>{shift ? 'Register active' : 'Register closed'}</strong><small>{shift ? 'Ready for transactions' : user.role === 'admin' ? 'Checkout available · shift tracking optional' : 'Open a shift to enable checkout'}</small></div></div><div className="pos-status-meta"><span>{clock.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span><span><b>{clock.toLocaleTimeString()}</b></span></div></div>
+      <div className="pos-status-strip"><div className="pos-status-main"><span className={`status-orb ${shift || isAdmin ? '' : 'inactive'}`} /><div><strong>{shift || isAdmin ? 'Register active' : 'Register closed'}</strong><small>{shift ? 'Ready for transactions' : isAdmin ? 'Checkout available · shift tracking optional' : 'Open a shift to enable checkout'}</small></div></div><div className="pos-status-meta"><span>{clock.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span><span><b>{clock.toLocaleTimeString()}</b></span></div></div>
       <div className="page-heading"><div><p className="eyebrow">{user.role === 'admin' ? 'ADMIN WORKSPACE' : 'CASHIER WORKSPACE'}</p><h1>Point of sale</h1><p className="muted">Search products, build a sale, and print receipts.</p></div></div>
       {error && <div className="error-banner" role="alert">{error}</div>}
       <div className="stat-grid cashier-stats"><StatCard label="Today's sales" value={money(dailyTotals?.sales || 0)} detail={`Cash ${money(dailyTotals?.cash_sales || 0)} · GCash ${money(dailyTotals?.gcash_sales || 0)} · ${dailyTotals?.transactions || 0} sales`} icon="$" /><StatCard label="Available products" value={availableProducts.filter((product) => product.stock_quantity > 0).length} detail="In-stock products" icon="▤" tone="orange" /><StatCard label="Current sale" value={money(total)} detail={`${cart.reduce((sum, item) => sum + item.quantity, 0)} items in cart`} icon="$" /></div>
       <div className="content-grid pos-grid">
         <article className="panel pos-products"><div className="panel-heading"><div><h2>Available products</h2><p>Search by product name or SKU</p></div></div><div className="pos-product-filters"><label className="search-box pos-search"><span>⌕</span><input value={search} onChange={(event) => { setSearch(event.target.value); setProductPage(1); }} placeholder="Search products…" /></label><select aria-label="Filter products by category" value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setProductPage(1); }}><option value="all">All categories</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select></div><div className="pos-product-list">
-          {pagedProducts.map((product) => <div className="pos-product-row" key={product.id}><div><strong>{product.name}</strong><small>{product.category || 'Uncategorized'} · {product.sku}</small></div><div className="pos-product-pricing"><strong>{money(product.unit_price)}</strong><small>{product.stock_quantity} stk</small></div><button className="outline-button" disabled={(!shift && user.role === 'cashier') || showCloseShift || product.stock_quantity < 1} onClick={() => addToCart(product)}>Add</button></div>)}
+          {pagedProducts.map((product) => <div className="pos-product-row" key={product.id}><div><strong>{product.name}</strong><small>{product.category || 'Uncategorized'} · {product.sku}</small></div><div className="pos-product-pricing"><strong>{money(product.unit_price)}</strong><small>{product.stock_quantity} stk</small></div><button className="outline-button" disabled={(!shift && !isAdmin) || showCloseShift || product.stock_quantity < 1} onClick={() => addToCart(product)}>Add</button></div>)}
           {filteredProducts.length === 0 && <div className="empty-chart">No available products match your search.</div>}
         </div>
         {filteredProducts.length > 0 && <div className="pos-pagination"><span>{((safeProductPage - 1) * productsPerPage) + 1}-{Math.min(safeProductPage * productsPerPage, filteredProducts.length)} of {filteredProducts.length} products</span><div><button type="button" className="outline-button" disabled={safeProductPage === 1} onClick={() => setProductPage((page) => Math.max(1, page - 1))}>← Prev</button><span>Page {safeProductPage} / {productPageCount}</span><button type="button" className="outline-button" disabled={safeProductPage === productPageCount} onClick={() => setProductPage((page) => Math.min(productPageCount, page + 1))}>Next →</button></div></div>}
@@ -256,7 +254,6 @@ export default function CashierDashboard({ token, user }) {
           {cart.length === 0 && <div className="empty-chart">Add products to start a sale.</div>}
         </div>
           <div className="cart-payment">
-            <label className="cash-tendered">Sales channel<select value={salesChannel} onChange={(event) => setSalesChannel(event.target.value)}><option value="store">Physical store</option><option value="ecommerce">E-commerce</option></select></label>
             <span className="cart-label">Payment method</span>
             <div className="payment-options">
               <button type="button" className={paymentMethod === 'cash' ? 'payment-option selected' : 'payment-option'} onClick={() => setPaymentMethod('cash')}>Cash</button>
@@ -268,7 +265,7 @@ export default function CashierDashboard({ token, user }) {
           {paymentMethod === 'cash' && tendered !== '' && <div className="change-row"><span>Change</span><strong>{money(Math.max(0, Number(tendered) - total))}</strong></div>}
           <div className="cart-actions">
             {cart.length > 0 && <button className="outline-button clear-cart" type="button" onClick={() => { setCart([]); setTendered(''); }}>Clear</button>}
-            <button className="primary-button checkout-button" disabled={(!shift && user.role === 'cashier') || showCloseShift || busy || !cart.length || (paymentMethod === 'cash' && Number(tendered) < total)} onClick={checkout}>{busy ? 'Processing…' : 'Complete sale'} <span>→</span></button>
+            <button className="primary-button checkout-button" disabled={(!shift && !isAdmin) || showCloseShift || busy || !cart.length || (paymentMethod === 'cash' && Number(tendered) < total)} onClick={checkout}>{busy ? 'Processing…' : 'Complete sale'} <span>→</span></button>
           </div>
         </article>
       </div>

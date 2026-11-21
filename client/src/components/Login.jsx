@@ -92,12 +92,7 @@ export default function Login({ onLogin, busy, error }) {
         <p className="eyebrow">RETAIL &amp; E-COMMERCE MANAGEMENT</p>
         {mode === 'login' && <>
           <h1>Welcome back</h1>
-          <p className="muted">Sign in to manage POS data and review retail and e-commerce sales analytics.</p>
           <div className="login-context" aria-label="System scope">
-            <span>Data source · POS</span>
-            <span>Real-Time APIs</span>
-            <span>Governance · PCI DSS</span>
-            <span>Output · Sales Analytics</span>
           </div>
           <form onSubmit={(event) => { event.preventDefault(); onLogin(email, password); }}>
             <label>Email address<input type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
@@ -112,7 +107,6 @@ export default function Login({ onLogin, busy, error }) {
             <button className="primary-button full-width" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'} <span>→</span></button>
           </form>
           <button type="button" className="link-button forgot-link" onClick={() => { setRecoveryError(''); setRecoveryMessage(''); setMode('forgot'); }}>Forgot password?</button>
-          <p className="login-note">Access is provisioned by your administrator.</p>
         </>}
         {mode === 'forgot' && <>
           <h1>Forgot password?</h1>
