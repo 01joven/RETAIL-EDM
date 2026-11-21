@@ -10,9 +10,9 @@ RetailFlow is a retail and e-commerce management system using POS as its data so
 - **Express API** (`server/src`) validates input, authenticates dashboard users with an eight-hour JWT, applies role checks, and executes parameterized PostgreSQL queries.
 - **POS data source and Real-Time API integration** send sales to `POST /api/v1/transactions/ingest` with the `x-pos-api-key` header. The API derives prices from the product catalog, persists each transaction and its items in one database transaction, and treats `externalId` as an idempotency key.
 - **Retail and e-commerce analytics** record the sales channel (`store` or `ecommerce`) and snapshot product categories on each sale, enabling channel and category reporting.
-- **Cashier shifts** track each cashier's opening float, completed cash and GCash sales, expected drawer cash, and counted cash at close. Cashier checkout requires an active shift.
+- **Staff shifts** track an admin's or cashier's opening float, completed cash and GCash sales, expected drawer cash, and counted cash at close. Cashier checkout requires an active shift; admins can sell without one or open a shift for drawer tracking.
 - **Integration monitoring** stores request metadata and outcomes (not request bodies or card data) for the admin API activity screen.
-- **PostgreSQL** stores users, products, customers, cashier shifts, transactions, and transaction items. Roles are exactly `admin` and `cashier`; transaction item rows snapshot the product name, SKU, and unit price at sale time, and sales can optionally link to a customer.
+- **PostgreSQL** stores users, products, legacy customer records, staff shifts, transactions, and transaction items. Roles are exactly `admin` and `cashier`; transaction item rows snapshot the product name, SKU, and unit price at sale time. Dashboard checkout does not collect customer details or offer credit.
 - **Reports** group completed transactions by day, week, or month. The date-range end is exclusive.
 - **Governance boundary**: PCI DSS is the selected governance requirement. The application excludes cardholder data and is not a PCI DSS certification; organizations must assess their full deployment and operating environment.
 
@@ -21,7 +21,7 @@ RetailFlow is a retail and e-commerce management system using POS as its data so
 ```text
 client/
   src/api/                 API client
-  src/components/          Login, role dashboards, catalog, customers, users, transactions, reports, settings
+  src/components/          Login, role dashboards and POS, catalog, users, transactions, reports, settings
   src/App.jsx              Application state and page routing
   src/styles.css           Responsive dashboard styles
 server/
@@ -134,10 +134,10 @@ All endpoints are under `/api/v1`. Dashboard endpoints use `Authorization: Beare
 | `GET /settings` | Admin | View non-secret system settings |
 | `GET /transactions` | Admin or cashier | Search/date filter; admins see all, cashiers only their sales; max 100 |
 | `GET /transactions/:id` | Admin or owning cashier | View sale details and receipt |
-| `GET /shifts/current` | Cashier | View the active shift and cash/GCash totals |
-| `POST /shifts` | Cashier | Open a shift with an opening float (defaults to 10.00) |
-| `POST /shifts/:id/close` | Owning cashier | Close a shift with counted cash and record the cash difference |
-| `POST /transactions` | Admin or cashier | Create sale; cashier sales require an active shift |
+| `GET /shifts/current` | Admin or cashier | View the active shift, shift totals, and today's sales (cashiers see their own sales; admins see store totals) |
+| `POST /shifts` | Admin or cashier | Open the signed-in user's shift with an opening float (defaults to 10.00) |
+| `POST /shifts/:id/close` | Admin or owning cashier | Close the signed-in user's shift with counted cash and record the cash difference |
+| `POST /transactions` | Admin or cashier | Create sale; cashier sales require an active shift, while admin shifts are optional |
 | `POST /transactions/ingest` | POS API key | Import a POS transaction |
 | `GET /reports/sales?period=daily\|weekly\|monthly` | Admin | Sales totals, transaction counts, average order, and period buckets |
 | `GET /integration/activity` | Admin | Recent POS API outcomes, request latency, and 24-hour counts |
@@ -162,7 +162,7 @@ POS ingestion body:
 
 Required header: `x-pos-api-key: <POS_API_KEY>`. Do not include payment-card fields. Repeated `externalId` values return the previously saved transaction rather than inserting a duplicate.
 `salesChannel` may be `store` or `ecommerce`; it defaults to `store` for earlier integrations. Reports use category snapshots captured when each sale is recorded.
-`customerId` is optional and must identify an existing customer record when provided.
+`customerId` remains optional for integrations using existing customer records; dashboard checkout does not request or attach a customer.
 
 ## Verification
 

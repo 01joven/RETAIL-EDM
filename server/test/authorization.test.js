@@ -34,7 +34,7 @@ test('only the two supported roles are authorized', () => {
   assert.equal(requestRole('manager', ['admin', 'cashier']).statusCode, 403);
 });
 
-test('only cashiers are authorized to manage cashier shifts', () => {
-  assert.equal(requestRole('admin', ['cashier']).statusCode, 403);
-  assert.equal(requestRole('cashier', ['cashier']).continued, true);
+test('admins and cashiers are authorized to manage their own shifts', () => {
+  assert.equal(requestRole('admin', ['admin', 'cashier']).continued, true);
+  assert.equal(requestRole('cashier', ['admin', 'cashier']).continued, true);
 });

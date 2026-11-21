@@ -9,12 +9,12 @@ function parseCashAmount(value) {
   return Number.isFinite(amount) ? amount : null;
 }
 
-export default function CashierDashboard({ token }) {
+export default function CashierDashboard({ token, user }) {
   const [products, setProducts] = useState([]);
-  const [customers, setCustomers] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [shift, setShift] = useState(null);
   const [shiftTotals, setShiftTotals] = useState(null);
+  const [dailyTotals, setDailyTotals] = useState(null);
   const [cart, setCart] = useState([]);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
@@ -27,7 +27,6 @@ export default function CashierDashboard({ token }) {
   const [closingCash, setClosingCash] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [salesChannel, setSalesChannel] = useState('store');
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [tendered, setTendered] = useState('');
   const [clock, setClock] = useState(new Date());
   const [productPage, setProductPage] = useState(1);
@@ -44,13 +43,8 @@ export default function CashierDashboard({ token }) {
     setTransactions(transactionResult.transactions);
     setShift(shiftResult.shift);
     setShiftTotals(shiftResult.totals);
-    try {
-      const customerResult = await api('/customers?limit=100', { token });
-      setCustomers(customerResult.customers);
-      setError('');
-    } catch (reason) {
-      setError(`Customer records are unavailable: ${reason.message}`);
-    }
+    setDailyTotals(shiftResult.dailyTotals);
+    setError('');
   }, [token]);
   useEffect(() => {
     load().catch((reason) => setError(reason.message));
@@ -60,8 +54,9 @@ export default function CashierDashboard({ token }) {
     return () => window.clearInterval(timer);
   }, []);
 
-  const categories = [...new Set(products.map((product) => product.category || 'Uncategorized'))].sort();
-  const filteredProducts = products.filter((product) =>
+  const availableProducts = products.filter((product) => product.active !== false);
+  const categories = [...new Set(availableProducts.map((product) => product.category || 'Uncategorized'))].sort();
+  const filteredProducts = availableProducts.filter((product) =>
     (categoryFilter === 'all' || (product.category || 'Uncategorized') === categoryFilter) &&
     `${product.name} ${product.sku}`.toLowerCase().includes(search.trim().toLowerCase())
   );
@@ -94,6 +89,7 @@ export default function CashierDashboard({ token }) {
       });
       setShift(result.shift);
       setShiftTotals(result.totals);
+      setDailyTotals(result.dailyTotals);
       setShiftNotice('Shift opened.');
     } catch (reason) {
       setError(reason.message);
@@ -125,8 +121,9 @@ export default function CashierDashboard({ token }) {
       });
       setShift(null);
       setShiftTotals(null);
+      setDailyTotals(result.dailyTotals);
       setShowCloseShift(false);
-      setShiftNotice(`Shift closed. Cash difference: ${money(result.shift.cash_difference)}.`);
+      setShiftNotice(`Shift closed. Today's sales: ${money(result.dailyTotals.sales)}. Cash difference: ${money(result.shift.cash_difference)}.`);
     } catch (reason) {
       setError(reason.message);
     } finally {
@@ -144,8 +141,8 @@ export default function CashierDashboard({ token }) {
   }
 
   function addToCart(product) {
-    if (!shift) {
-      setError('Open a cashier shift before starting a sale');
+    if (!shift && user.role === 'cashier') {
+      setError('Open a shift before starting a sale');
       return;
     }
     if (showCloseShift) {
@@ -181,7 +178,6 @@ export default function CashierDashboard({ token }) {
           occurredAt: new Date().toISOString(),
           paymentMethod,
           salesChannel,
-          customerId: selectedCustomerId ? Number(selectedCustomerId) : undefined,
           tendered: paymentMethod === 'cash' ? Number(tendered).toFixed(2) : undefined,
           items: cart
         })
@@ -192,7 +188,6 @@ export default function CashierDashboard({ token }) {
       setTendered('');
       setPaymentMethod('cash');
       setSalesChannel('store');
-      setSelectedCustomerId('');
       await load();
     } catch (reason) {
       setError(reason.message);
@@ -214,6 +209,7 @@ export default function CashierDashboard({ token }) {
                 <span>Cash Sales: <strong>{money(shiftTotals?.cash_sales || 0)}</strong></span>
                 <span>GCash Sales: <strong>{money(shiftTotals?.gcash_sales || 0)}</strong></span>
                 <span>Expected Cash: <strong>{money(shiftTotals?.expected_cash || shift.opening_float)}</strong></span>
+                <span>Today's Sales: <strong>{money(dailyTotals?.sales || 0)}</strong></span>
               </div>
             </div>
             {!showCloseShift && <button className="shift-action" type="button" onClick={beginClosingShift}>Close shift</button>}
@@ -230,7 +226,7 @@ export default function CashierDashboard({ token }) {
           <div className="shift-banner-main">
             <span className="shift-orb" />
             <div className="shift-banner-content">
-              <div className="shift-banner-title"><strong>No active shift</strong><span>Open a shift to start checkout</span></div>
+              <div className="shift-banner-title"><strong>No active shift</strong><span>{user.role === 'admin' ? 'Admin checkout is available; open a shift to track drawer cash' : 'Open a shift to start checkout'}</span></div>
             </div>
             <form className="shift-open-form" onSubmit={openShift}>
               <label>Opening float<input type="number" min="0" step="0.01" required value={openingFloat} onChange={(event) => setOpeningFloat(event.target.value)} /></label>
@@ -240,13 +236,13 @@ export default function CashierDashboard({ token }) {
         </article>
       )}
       {shiftNotice && <div className="success-banner shift-notice" role="status">{shiftNotice}</div>}
-      <div className="pos-status-strip"><div className="pos-status-main"><span className={`status-orb ${shift ? '' : 'inactive'}`} /><div><strong>{shift ? 'Register active' : 'Register closed'}</strong><small>{shift ? 'Ready for transactions' : 'Open a shift to enable checkout'}</small></div></div><div className="pos-status-meta"><span>{clock.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span><span><b>{clock.toLocaleTimeString()}</b></span></div></div>
-      <div className="page-heading"><div><p className="eyebrow">CASHIER WORKSPACE</p><h1>Point of sale</h1><p className="muted">Search products, build a sale, and print customer receipts.</p></div></div>
+      <div className="pos-status-strip"><div className="pos-status-main"><span className={`status-orb ${shift ? '' : 'inactive'}`} /><div><strong>{shift ? 'Register active' : 'Register closed'}</strong><small>{shift ? 'Ready for transactions' : user.role === 'admin' ? 'Checkout available · shift tracking optional' : 'Open a shift to enable checkout'}</small></div></div><div className="pos-status-meta"><span>{clock.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</span><span><b>{clock.toLocaleTimeString()}</b></span></div></div>
+      <div className="page-heading"><div><p className="eyebrow">{user.role === 'admin' ? 'ADMIN WORKSPACE' : 'CASHIER WORKSPACE'}</p><h1>Point of sale</h1><p className="muted">Search products, build a sale, and print receipts.</p></div></div>
       {error && <div className="error-banner" role="alert">{error}</div>}
-      <div className="stat-grid cashier-stats"><StatCard label="Your recent transactions" value={transactions.length} detail="Most recent sales" icon="↗" tone="blue" /><StatCard label="Available products" value={products.filter((product) => product.stock_quantity > 0).length} detail="In-stock products" icon="▤" tone="orange" /><StatCard label="Current sale" value={money(total)} detail={`${cart.reduce((sum, item) => sum + item.quantity, 0)} items in cart`} icon="$" /></div>
+      <div className="stat-grid cashier-stats"><StatCard label="Today's sales" value={money(dailyTotals?.sales || 0)} detail={`Cash ${money(dailyTotals?.cash_sales || 0)} · GCash ${money(dailyTotals?.gcash_sales || 0)} · ${dailyTotals?.transactions || 0} sales`} icon="$" /><StatCard label="Available products" value={availableProducts.filter((product) => product.stock_quantity > 0).length} detail="In-stock products" icon="▤" tone="orange" /><StatCard label="Current sale" value={money(total)} detail={`${cart.reduce((sum, item) => sum + item.quantity, 0)} items in cart`} icon="$" /></div>
       <div className="content-grid pos-grid">
         <article className="panel pos-products"><div className="panel-heading"><div><h2>Available products</h2><p>Search by product name or SKU</p></div></div><div className="pos-product-filters"><label className="search-box pos-search"><span>⌕</span><input value={search} onChange={(event) => { setSearch(event.target.value); setProductPage(1); }} placeholder="Search products…" /></label><select aria-label="Filter products by category" value={categoryFilter} onChange={(event) => { setCategoryFilter(event.target.value); setProductPage(1); }}><option value="all">All categories</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select></div><div className="pos-product-list">
-          {pagedProducts.map((product) => <div className="pos-product-row" key={product.id}><div><strong>{product.name}</strong><small>{product.category || 'Uncategorized'} · {product.sku}</small></div><div className="pos-product-pricing"><strong>{money(product.unit_price)}</strong><small>{product.stock_quantity} stk</small></div><button className="outline-button" disabled={!shift || showCloseShift || product.stock_quantity < 1} onClick={() => addToCart(product)}>Add</button></div>)}
+          {pagedProducts.map((product) => <div className="pos-product-row" key={product.id}><div><strong>{product.name}</strong><small>{product.category || 'Uncategorized'} · {product.sku}</small></div><div className="pos-product-pricing"><strong>{money(product.unit_price)}</strong><small>{product.stock_quantity} stk</small></div><button className="outline-button" disabled={(!shift && user.role === 'cashier') || showCloseShift || product.stock_quantity < 1} onClick={() => addToCart(product)}>Add</button></div>)}
           {filteredProducts.length === 0 && <div className="empty-chart">No available products match your search.</div>}
         </div>
         {filteredProducts.length > 0 && <div className="pos-pagination"><span>{((safeProductPage - 1) * productsPerPage) + 1}-{Math.min(safeProductPage * productsPerPage, filteredProducts.length)} of {filteredProducts.length} products</span><div><button type="button" className="outline-button" disabled={safeProductPage === 1} onClick={() => setProductPage((page) => Math.max(1, page - 1))}>← Prev</button><span>Page {safeProductPage} / {productPageCount}</span><button type="button" className="outline-button" disabled={safeProductPage === productPageCount} onClick={() => setProductPage((page) => Math.min(productPageCount, page + 1))}>Next →</button></div></div>}
@@ -260,7 +256,6 @@ export default function CashierDashboard({ token }) {
           {cart.length === 0 && <div className="empty-chart">Add products to start a sale.</div>}
         </div>
           <div className="cart-payment">
-            <label className="cash-tendered">Customer<select value={selectedCustomerId} onChange={(event) => setSelectedCustomerId(event.target.value)}><option value="">Walk-in customer</option>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}{customer.phone ? ` · ${customer.phone}` : ''}</option>)}</select></label>
             <label className="cash-tendered">Sales channel<select value={salesChannel} onChange={(event) => setSalesChannel(event.target.value)}><option value="store">Physical store</option><option value="ecommerce">E-commerce</option></select></label>
             <span className="cart-label">Payment method</span>
             <div className="payment-options">
@@ -273,11 +268,11 @@ export default function CashierDashboard({ token }) {
           {paymentMethod === 'cash' && tendered !== '' && <div className="change-row"><span>Change</span><strong>{money(Math.max(0, Number(tendered) - total))}</strong></div>}
           <div className="cart-actions">
             {cart.length > 0 && <button className="outline-button clear-cart" type="button" onClick={() => { setCart([]); setTendered(''); }}>Clear</button>}
-            <button className="primary-button checkout-button" disabled={!shift || showCloseShift || busy || !cart.length || (paymentMethod === 'cash' && Number(tendered) < total)} onClick={checkout}>{busy ? 'Processing…' : 'Complete sale'} <span>→</span></button>
+            <button className="primary-button checkout-button" disabled={(!shift && user.role === 'cashier') || showCloseShift || busy || !cart.length || (paymentMethod === 'cash' && Number(tendered) < total)} onClick={checkout}>{busy ? 'Processing…' : 'Complete sale'} <span>→</span></button>
           </div>
         </article>
       </div>
-      <article className="panel table-panel cashier-history"><div className="table-toolbar"><div><h2>Your recent sales</h2><p>Only transactions processed by your account</p></div></div><div className="table-scroll"><table><thead><tr><th>POS REFERENCE</th><th>DATE &amp; TIME</th><th>CUSTOMER</th><th>CHANNEL</th><th>PAYMENT</th><th>STATUS</th><th className="align-right">TOTAL</th></tr></thead><tbody>{transactions.map((transaction) => <tr key={transaction.id}><td><strong>{transaction.external_id}</strong></td><td>{new Date(transaction.occurred_at).toLocaleString()}</td><td>{transaction.customer_name || 'Walk-in'}</td><td>{transaction.sales_channel === 'ecommerce' ? 'E-commerce' : 'Store'}</td><td>{transaction.payment_method === 'gcash' ? 'GCash' : 'Cash'}</td><td><span className={`status-pill ${transaction.status}`}>{transaction.status}</span></td><td className="align-right amount-cell">{money(transaction.total)}</td></tr>)}{transactions.length === 0 && <tr><td colSpan="7" className="table-empty">Your sales will appear here after checkout.</td></tr>}</tbody></table></div></article>
+      <article className="panel table-panel cashier-history"><div className="table-toolbar"><div><h2>Recent sales</h2><p>{user.role === 'admin' ? 'Recent store transactions' : 'Only transactions processed by your account'}</p></div></div><div className="table-scroll"><table><thead><tr><th>POS REFERENCE</th><th>DATE &amp; TIME</th><th>CHANNEL</th><th>PAYMENT</th><th>STATUS</th><th className="align-right">TOTAL</th></tr></thead><tbody>{transactions.map((transaction) => <tr key={transaction.id}><td><strong>{transaction.external_id}</strong></td><td>{new Date(transaction.occurred_at).toLocaleString()}</td><td>{transaction.sales_channel === 'ecommerce' ? 'E-commerce' : 'Store'}</td><td>{transaction.payment_method === 'gcash' ? 'GCash' : 'Cash'}</td><td><span className={`status-pill ${transaction.status}`}>{transaction.status}</span></td><td className="align-right amount-cell">{money(transaction.total)}</td></tr>)}{transactions.length === 0 && <tr><td colSpan="6" className="table-empty">Sales will appear here after checkout.</td></tr>}</tbody></table></div></article>
       {receipt && <div className="receipt-overlay" role="dialog" aria-modal="true" aria-label="Sales receipt"><article className="receipt-card"><button className="receipt-close no-print" onClick={() => setReceipt(null)} aria-label="Close receipt">×</button><div className="receipt-brand">RetailFlow</div><p className="receipt-heading">SALES RECEIPT</p><p className="receipt-reference">{receipt.transaction.external_id}</p><p className="receipt-date">{new Date(receipt.transaction.occurred_at).toLocaleString()}</p>{receipt.transaction.customer_name && <p className="receipt-customer">{receipt.transaction.customer_name}</p>}<div className="receipt-meta"><span>{receipt.transaction.sales_channel === 'ecommerce' ? 'E-commerce' : 'Physical store'}</span><span>{receipt.transaction.payment_method === 'gcash' ? 'GCash' : 'Cash'}</span></div><div className="receipt-lines">{receipt.items.map((item) => <div className="receipt-line" key={item.product_id}><span>{item.product_name} × {item.quantity}</span><strong>{money(item.line_total)}</strong></div>)}</div><div className="receipt-total"><span>Total</span><strong>{money(receipt.transaction.total)}</strong></div>{receipt.transaction.payment_method === 'cash' && <div className="receipt-meta"><span>Tendered {money(receipt.transaction.tendered)}</span><span>Change {money(receipt.transaction.change_amount)}</span></div>}<p className="receipt-thanks">Thank you for your purchase</p><div className="receipt-actions no-print"><button className="outline-button" onClick={() => window.print()}>Print receipt</button><button className="primary-button" onClick={() => setReceipt(null)}>Done</button></div></article></div>}
     </section>
   );

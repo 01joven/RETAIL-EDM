@@ -1,8 +1,8 @@
 const adminNavItems = [
   ['Overview', 'overview', 'overview'],
+  ['Point of sale', 'overview', 'dashboard'],
   ['Transactions', 'transactions', 'transactions'],
   ['Products & inventory', 'products', 'products'],
-  ['Customers', 'customers', 'customers'],
   ['Sales analytics', 'reports', 'reports'],
   ['Users', 'users', 'users'],
   ['Audit log', 'audit', 'audit'],
@@ -12,15 +12,13 @@ const adminNavItems = [
 const cashierNavItems = [
   ['Point of sale', 'overview', 'dashboard'],
   ['Transaction history', 'transactions', 'transactions'],
-  ['Products', 'products', 'products'],
-  ['Customer information', 'customers', 'customers']
+  ['Products', 'products', 'products']
 ];
 
 const iconShapes = {
   overview: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,
   transactions: <><path d="M7 7h13l-3-3" /><path d="M17 17H4l3 3" /><path d="M20 7l-4 4" /><path d="m4 17 4-4" /></>,
   products: <><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z" /><path d="m4.5 7.8 7.5 4.3 7.5-4.3M12 12v9" /></>,
-  customers: <><circle cx="9" cy="8" r="3" /><path d="M3 20v-1a6 6 0 0 1 12 0v1M16 5.5a3 3 0 0 1 0 5.8M18 14a5 5 0 0 1 3 5v1" /></>,
   reports: <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></>,
   users: <><circle cx="9" cy="8" r="3" /><path d="M3 20v-1a6 6 0 0 1 12 0v1M16 5a3 3 0 0 1 0 6" /></>,
   audit: <><path d="M12 3 20 6v5c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6l8-3Z" /><path d="m8.5 12 2.2 2.2 4.8-4.8" /></>,

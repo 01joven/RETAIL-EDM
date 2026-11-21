@@ -17,8 +17,8 @@ PCI DSS certification.
 The system includes:
 
 - Admin and cashier accounts
-- A cashier point-of-sale screen with product search, cart, checkout, and printable receipts
-- Basic customer records with optional email and phone, selectable during checkout
+- A point-of-sale screen for admins and cashiers, with product search, cart, checkout, and printable receipts
+- Cash and GCash payments, with no customer credit workflow
 - Product prices and stock quantities
 - Transaction history, receipts, and CSV export
 - Admin sales analytics, audit events, and POS API activity
@@ -27,8 +27,8 @@ The system includes:
 
 | Role | Access |
 |---|---|
-| Admin | Admin menu: overview, transactions, products and inventory, customers, sales analytics, users, audit log, API activity, and settings |
-| Cashier | Cashier menu: point of sale, transaction history, active products, and customer information |
+| Admin | Admin menu: overview, point of sale, transactions, products and inventory, sales analytics, users, audit log, API activity, and settings |
+| Cashier | Cashier menu: point of sale, transaction history, and active products |
 
 Both roles use the same sign-in form. The account role controls the dashboard and menu: admins see only the admin menu, while cashiers
 see only the cashier menu. Cashier accounts are created by an administrator. Each staff member should use their own account.
@@ -54,45 +54,37 @@ The code expires after 10 minutes and can be tried up to five times. If recovery
 
 ## 4. Point of sale
 
-The **Point of sale** page is available to cashiers.
+The **Point of sale** page is available to admins and cashiers. An admin can use it whenever a cashier is unavailable.
 
-1. Open a shift from the green shift panel before checkout. The opening float defaults to ₱10.00 and can be changed. Only one shift can be active per cashier.
+1. Cashiers must open a shift before checkout. Admins can sell without an active shift, or open one to track drawer cash. The opening float defaults to ₱10.00 and can be changed. Only one shift can be active per account.
 2. Search for a product by name or SKU, or filter by category.
-3. Check the shift panel's cash sales, GCash sales, and expected cash. Expected cash is the opening float plus completed cash sales for this shift.
+3. Check today's sales, including the cash and GCash totals. Cashiers see their own sales; admins see the store totals. While a shift is active, the panel also shows that shift's cash and GCash totals and expected cash.
 4. Select **Add** for each product. Use the quantity field in the cart to change the quantity, or **×** to remove an item.
 5. Check the cart items and total.
-6. Optionally select an existing customer, or leave **Walk-in customer** selected.
-7. Select the sales channel: **Physical store** or **E-commerce**.
-8. Select the payment method: **Cash** or **GCash**.
-9. For cash, enter the amount received. The screen shows the change due; cash checkout is disabled if the tender is less than the total.
-10. Select **Complete sale**.
-11. Review the receipt. Select **Print receipt** to print it, or **Done** to close it.
+6. Select the sales channel: **Physical store** or **E-commerce**.
+7. Select the payment method: **Cash** or **GCash**.
+8. For cash, enter the amount received. The screen shows the change due; cash checkout is disabled if the tender is less than the total.
+9. Select **Complete sale**.
+10. Review the receipt. Select **Print receipt** to print it, or **Done** to close it.
 
-To finish a shift, select **Close shift**, enter the counted cash, and confirm. The system records the cash difference from the expected amount. A new shift must be opened before that cashier can check out again.
+To finish an open shift, select **Close shift**, enter the counted cash, and confirm. The system records the cash difference and shows today's sales, which remain visible after closing. A cashier must open another shift before checking out again.
 
-The price is taken from the product catalog. Completing a sale reduces the stock quantity for each item. The cashier screen also shows
-the signed-in cashier's recent sales.
+The price is taken from the product catalog. Completing a sale reduces the stock quantity for each item. The POS screen also shows recent
+sales; cashiers see their own transactions, while admins can review store activity.
 
-## 5. Customer information
-
-The **Customer information** page is available to admins and cashiers. Add a customer's name and, optionally, email and phone number.
-Customer records can be searched by name or contact detail. Select an existing customer from the POS checkout list to associate that
-customer with a sale; otherwise, the sale is recorded as a walk-in. The customer link appears in transaction history and on the receipt.
-Deleting a customer record is not available in the current interface.
-
-## 6. Products and stock
+## 5. Products and stock
 
 The **Products** page shows product name, category, SKU, price, stock quantity, and active status.
 
 - Cashiers can search and view active products.
 - Admins can add products and edit SKU, name, category, price, stock quantity, or active status.
 - Admins can deactivate a product and activate it again later. Deactivated products remain in historical sales.
-- Products with no stock cannot be added to a cashier's sale.
+- Products with no stock cannot be added to a sale.
 - Completing a sale reduces stock. Voiding a completed transaction restores the sold quantity.
 
 Use the product edit form to correct a stock quantity. Check the product and quantity carefully before saving.
 
-## 7. Transactions
+## 6. Transactions
 
 Open **Transactions** or **Transaction history** to search and review sales.
 
@@ -107,7 +99,7 @@ Open **Transactions** or **Transaction history** to search and review sales.
 Voiding a sale restores its sold quantities to product stock. Refunding changes the transaction status; it does not restore stock
 automatically. Review the transaction carefully before choosing an action.
 
-## 8. Overview and sales reports
+## 7. Overview and sales reports
 
 The admin **Overview** page summarizes the last seven days, including gross sales, net sales, completed transaction count, average order
 value, active product count, sales trend, recent transactions, top products, payment methods, sales channels, and active products that are
@@ -125,7 +117,7 @@ The **Sales analytics** page supports daily, weekly, or monthly periods and date
 Select **Export CSV** to download the report. Reports use the transactions recorded in RetailFlow; check transaction history if a sale is
 missing or has an unexpected status.
 
-## 9. User management
+## 8. User management
 
 Only admins can open **Users**.
 
@@ -137,7 +129,7 @@ Only admins can open **Users**.
 
 The current screen does not provide an action for promoting a cashier to admin. Do not share administrator credentials.
 
-## 10. Audit log, API activity, and settings
+## 9. Audit log, API activity, and settings
 
 - **Audit log** lets admins review recent administrative and transaction events.
 - **API activity** shows the API/database health, recent POS requests, success and failure counts, and response times. It refreshes every 15
@@ -145,7 +137,7 @@ The current screen does not provide an action for promoting a cashier to admin. 
 - **System settings** is a read-only view of operational information, such as API version, POS integration, supported roles, and whether
   cardholder data is stored. Secret values and connection strings are not shown.
 
-## 11. POS API integration
+## 10. POS API integration
 
 External POS systems can send transactions to:
 
@@ -195,7 +187,7 @@ Integration requirements:
 If a request times out, check **API activity** and transaction history before retrying. Reuse the same `externalId` when retrying the same
 sale.
 
-## 12. Data handling and operational notes
+## 11. Data handling and operational notes
 
 RetailFlow must not receive or store cardholder data. Only send the sale information required to identify products, quantities, payment
 method, sales channel, and transaction total.

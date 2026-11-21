@@ -42,17 +42,17 @@ async function ingest(req, res, next) {
       return res.status(400).json({ error: validationError });
     }
     let shiftId = null;
-    if (req.user?.role === 'cashier') {
+    if (req.user) {
       const activeShift = await pool.query(
         'SELECT id FROM cashier_shifts WHERE cashier_user_id = $1 AND closed_at IS NULL',
         [req.user.id]
       );
-      if (!activeShift.rowCount) {
+      if (!activeShift.rowCount && req.user.role === 'cashier') {
         const error = new Error('Open a cashier shift before completing a sale');
         error.status = 409;
         throw error;
       }
-      shiftId = activeShift.rows[0].id;
+      shiftId = activeShift.rows[0]?.id ?? null;
     }
     const result = await createTransaction({
       externalId: req.body.externalId.trim(),

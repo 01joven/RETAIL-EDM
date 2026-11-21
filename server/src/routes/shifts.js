@@ -6,28 +6,53 @@ import { cashDifference, expectedCash, isValidMoney } from '../utils/shiftMetric
 const router = Router();
 const defaultOpeningFloat = 10;
 
-router.use(authenticate, authorize('cashier'));
+router.use(authenticate, authorize('admin', 'cashier'));
 
-async function getShiftSummary(db, shift) {
+async function getShiftSummary(db, shift, user) {
   const result = await db.query(
-    `SELECT
-       COALESCE(SUM(total) FILTER (WHERE payment_method = 'cash' AND status = 'completed'), 0)::text AS cash_sales,
-       COALESCE(SUM(total) FILTER (WHERE payment_method = 'gcash' AND status = 'completed'), 0)::text AS gcash_sales
+    `WITH business_day AS (
+       SELECT date_trunc('day', NOW() AT TIME ZONE 'Asia/Manila') AT TIME ZONE 'Asia/Manila' AS starts_at
+     )
+     SELECT
+       COALESCE(SUM(total) FILTER (WHERE payment_method = 'cash' AND status = 'completed' AND shift_id = $1::bigint), 0)::text AS cash_sales,
+       COALESCE(SUM(total) FILTER (WHERE payment_method = 'gcash' AND status = 'completed' AND shift_id = $1::bigint), 0)::text AS gcash_sales,
+       COALESCE(SUM(total) FILTER (WHERE status = 'completed' AND occurred_at >= business_day.starts_at
+         AND occurred_at < business_day.starts_at + INTERVAL '1 day'
+         AND ($2::boolean OR processed_by_user_id = $3)), 0)::text AS daily_sales,
+       COALESCE(SUM(total) FILTER (WHERE payment_method = 'cash' AND status = 'completed'
+         AND occurred_at >= business_day.starts_at AND occurred_at < business_day.starts_at + INTERVAL '1 day'
+         AND ($2::boolean OR processed_by_user_id = $3)), 0)::text AS daily_cash_sales,
+       COALESCE(SUM(total) FILTER (WHERE payment_method = 'gcash' AND status = 'completed'
+         AND occurred_at >= business_day.starts_at AND occurred_at < business_day.starts_at + INTERVAL '1 day'
+         AND ($2::boolean OR processed_by_user_id = $3)), 0)::text AS daily_gcash_sales,
+       COUNT(*) FILTER (WHERE status = 'completed' AND occurred_at >= business_day.starts_at
+         AND occurred_at < business_day.starts_at + INTERVAL '1 day'
+         AND ($2::boolean OR processed_by_user_id = $3))::integer AS daily_transactions
      FROM transactions
-     WHERE shift_id = $1`,
-    [shift.id]
+     CROSS JOIN business_day
+     WHERE ($1::bigint IS NOT NULL AND shift_id = $1::bigint)
+        OR (occurred_at >= business_day.starts_at
+          AND occurred_at < business_day.starts_at + INTERVAL '1 day'
+          AND ($2::boolean OR processed_by_user_id = $3))`,
+    [shift?.id ?? null, user.role === 'admin', user.id]
   );
   const totals = result.rows[0];
   return {
-    shift: {
+    shift: shift ? {
       id: shift.id,
       opened_at: shift.opened_at,
       opening_float: shift.opening_float
-    },
-    totals: {
+    } : null,
+    totals: shift ? {
       cash_sales: totals.cash_sales,
       gcash_sales: totals.gcash_sales,
       expected_cash: expectedCash(shift.opening_float, totals.cash_sales)
+    } : null,
+    dailyTotals: {
+      sales: totals.daily_sales,
+      cash_sales: totals.daily_cash_sales,
+      gcash_sales: totals.daily_gcash_sales,
+      transactions: totals.daily_transactions
     }
   };
 }
@@ -40,8 +65,7 @@ router.get('/current', async (req, res, next) => {
        WHERE cashier_user_id = $1 AND closed_at IS NULL`,
       [req.user.id]
     );
-    if (!result.rowCount) return res.json({ shift: null, totals: null });
-    res.json(await getShiftSummary(pool, result.rows[0]));
+    res.json(await getShiftSummary(pool, result.rows[0] || null, req.user));
   } catch (error) {
     next(error);
   }
@@ -77,7 +101,7 @@ router.post('/', async (req, res, next) => {
       [req.user.id, req.user.email, String(shift.id), JSON.stringify({ openingFloat: shift.opening_float })]
     );
     await client.query('COMMIT');
-    res.status(201).json(await getShiftSummary(pool, shift));
+    res.status(201).json(await getShiftSummary(pool, shift, req.user));
   } catch (error) {
     if (client) await client.query('ROLLBACK');
     next(error);
@@ -112,7 +136,7 @@ router.post('/:id/close', async (req, res, next) => {
       return res.status(404).json({ error: 'Active shift not found' });
     }
 
-    const summary = await getShiftSummary(client, result.rows[0]);
+    const summary = await getShiftSummary(client, result.rows[0], req.user);
     const difference = cashDifference(closingCash.toFixed(2), summary.totals.expected_cash);
     const closed = await client.query(
       `UPDATE cashier_shifts
@@ -133,7 +157,7 @@ router.post('/:id/close', async (req, res, next) => {
       })]
     );
     await client.query('COMMIT');
-    res.json({ shift: closed.rows[0], totals: summary.totals });
+    res.json({ shift: closed.rows[0], totals: summary.totals, dailyTotals: summary.dailyTotals });
   } catch (error) {
     if (client) await client.query('ROLLBACK');
     next(error);
